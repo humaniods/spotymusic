@@ -1,0 +1,12 @@
+{
+  "name": "spotbridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first music library with Spotify official embeds",
+  "scripts": {
+    "start": "python3 -m http.server 5173",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=18" }
+}
