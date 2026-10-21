@@ -18,6 +18,17 @@ To run automated unit tests:
 npm test
 ```
 
+
+## Free online music (Audius)
+
+The **Free Music** tab now offers independent artists' newly released tracks, weekly trending tracks, and song/artist search, powered by the public [Audius API](https://docs.audius.co/api/). Click a track to stream it through the existing player; shuffle, seek, repeat and volume work as for local audio. Likes and playlist additions are saved locally and reloaded the next time you open the app.
+
+**Costs:** SpotyMusic has no checkout, subscription, payment gateway, billing or paid plans. Streaming on Audius uses the provider's openly streamable tracks, and this app intentionally excludes recordings marked unavailable or paywalled by Audius. You do not need a Spotify Premium subscription to play these Audius tracks.
+
+**Catalog limitation:** Audius is **not** a mirror of Spotify's licensed catalog. Latest means latest releases *on Audius*, not every new Bollywood, Punjabi, Hindi or international commercial hit. Some artists and tracks will not exist there. Spotify links still open in Spotify's official embeds and obey Spotify's limitations. Do not claim universal free access to Spotify's music.
+
+**Network:** Free Music requires an internet connection and Audius API availability. The API currently documents read-only public access, but rate limits, region restrictions, browser playback or upstream policy changes may affect specific songs. If the feed fails to load, the app shows an error and allows retrying. No secret is bundled with frontend code.
+
 ## What works
 
 - Play three original, browser-synthesized demonstration tracks with progress controls, volume, queue, shuffle and repeat.

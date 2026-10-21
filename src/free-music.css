@@ -1,0 +1,26 @@
+/* Free catalog screen; separate from the existing player styles. */
+.free-nav-tag { margin-left:auto; font-size:8px; letter-spacing:.7px; background:#354b29; color:#c7ff9a; padding:3px 5px; border-radius:4px }
+.free-search { display:grid; gap:10px; margin:26px 0 20px }
+.free-search-label { font-size:12px; color:#c8d4cc; font-weight:800 }
+.free-search-row { display:flex; gap:10px; min-width:0 }
+.free-search-row input { background:#222829; border:1px solid #3a4440; border-radius:9px; color:#f6f8f6; flex:1; min-width:0; padding:12px 14px; font-size:13px }
+.free-search-row input:focus { border-color:var(--green) }
+.free-filters { display:flex; gap:10px; flex-wrap:wrap; margin:5px 0 14px }
+.free-filters button.active { color:#172519; background:var(--green); border-color:var(--green) }
+#free-status { min-height:18px; max-width:none; text-align:left; margin-bottom:18px; line-height:1.65 }
+#free-results { min-height:58px }
+.free-cover { background:linear-gradient(140deg,#225e60,#314d2c 55%,#84627a) }
+.free-more-wrap { display:flex; justify-content:center; margin-top:20px }
+[hidden] { display:none!important }
+.free-disclaimer { color:#94a29b; font-size:11px; line-height:1.7; border-top:1px solid #2b3330; margin:25px 0; padding:18px 0 }
+.free-disclaimer a { color:#b5f69a }
+.hero-actions { flex-wrap:wrap }
+@media(max-width:760px) {
+  .free-nav-tag {display:none}
+  .free-search-row {flex-wrap:wrap}
+  .free-search-row input {width:100%;flex-basis:100%}
+  .free-search-row button {width:100%}
+  .free-filters button {flex:1}
+  .hero-actions .ghost {padding:5px 7px;font-size:11px}
+  .hero-actions {gap:6px}
+}
