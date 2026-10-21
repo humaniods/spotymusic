@@ -43,7 +43,8 @@ export function openverseUrl({mode='search', query='', offset=0, limit=SOURCE_LI
   url.searchParams.set('q', term);
   url.searchParams.set('page_size', String(Math.min(20,Math.max(1,limit))));
   url.searchParams.set('page', String(Math.floor(Math.max(0,offset)/limit)+1));
-  if (mode === 'latest') url.searchParams.set('sort_by','indexed_on');
+  if (mode === 'latest') url.searchParams.set('unstable__sort_by','indexed_on');
+  url.searchParams.set('category','music');
   return url.toString();
 }
 
