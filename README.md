@@ -1,66 +1,58 @@
-# SpotBridge — local music + official Spotify embeds
+# SpotyMusic — open-source, no-subscription music player
 
-**An independent, local-first music library with a familiar modern music-player experience.** It is not Spotify Premium, and it does not unlock, scrape, download, decrypt or redistribute Spotify's catalog.
+A responsive, local-first **MIT-licensed** music player that searches multiple free-to-access music catalogs, streams provider-authorized recordings, and plays internet radio and your own music files. No account, checkout, payment gateway or premium tier in SpotyMusic.
 
-## Start
+**Not a Spotify catalog unlock.** Third-party catalogs do not guarantee every new Bollywood, Punjabi, Hindi or international commercial song. Each track/station remains subject to its original provider's copyright, licensing, terms, browser format support and availability.
 
-Requirements: a modern browser, Python 3 to serve static files, and optionally Node 18+ for tests.
+## Music providers (four integrated)
 
-```bash
-cd spotbridge
+| Provider | What is available | Mode | API / license information |
+| --- | --- | --- | --- |
+| [Audius](https://docs.audius.co/api/) | Artist-uploaded tracks, newest and trending releases | On-demand, source-authorized stream | Public read API; not all uploads are freely streamable |
+| [Openverse](https://api.openverse.org/v1/) | Indexed Creative Commons and public-domain music/audio | Direct stream if original audio URL works | Anonymous rate-limited REST search; each result carries original attribution/license |
+| [Wikimedia Commons](https://www.mediawiki.org/wiki/API:Cross-site_requests) | Freely licensed/public-domain audio files | Direct streaming from Commons | MediaWiki CORS API; per-file license and credits on its file page |
+| [Radio Browser](https://api.radio-browser.info/) | Public internet radio station listings worldwide | **Live radio**, not seekable on-demand songs | Free/open-source station-directory API; each station's stream and rights remain separate |
+
+Each result shows the provider and source/credit link. **The app's MIT license covers app code, not externally hosted music.** Attribution and redistribution rules vary, and not all providers offer permission to download or reuse tracks. Listening to public radio doesn't give permission to record or redistribute broadcasts.
+
+## Run locally (₹0 software charge)
+
+Clone the repository:
+
+\`\`\`bash
+git clone https://github.com/humaniods/spotymusic.git
+cd spotymusic
 python3 -m http.server 5173
 # Open http://localhost:5173
-```
+\`\`\`
 
-To run automated unit tests:
+No packages or API credentials are needed to run the static player. To run tests: \`npm test\` (Node 18+; CI uses Node 22).
 
-```bash
-npm test
-```
+Click **Free Music** → select **All 4 sources** or a particular provider → choose **New releases**, **Popular & radio**, or search for a song/artist/station. Click any streamable result to play, like, or add it to a playlist. Radio is live: seeking/duration are disabled. Import your own audio on the Home/Library screens.
 
+### Important behavior
 
-## Free online music (Audius)
+- Audius has a real latest-upload catalog. Openverse's "new" sorting means **recently indexed**, not necessarily released today. Commons and radio discovery are searches/top-ranked stations and not a chronological release calendar.
+- On free-source search, each API runs separately; if one source is down or rate-limited, the others still display. Errors appear under the search filters.
+- Some returned audio URLs may fail due to unsupported codecs, provider hotlinking policies, browser CORS, region rules or removed files. The player shows an error instead of promising universal playback.
+- No paid subscriptions or keys are embedded. Spotify URLs still use Spotify's official embeddable player and its own rules.
+- Existing local MP3/WAV/etc. imports and Spotify embeds continue to work, as do playlists and likes.
 
-The **Free Music** tab now offers independent artists' newly released tracks, weekly trending tracks, and song/artist search, powered by the public [Audius API](https://docs.audius.co/api/). Click a track to stream it through the existing player; shuffle, seek, repeat and volume work as for local audio. Likes and playlist additions are saved locally and reloaded the next time you open the app.
+### Privacy and persistence
 
-**Costs:** SpotyMusic has no checkout, subscription, payment gateway, billing or paid plans. Streaming on Audius uses the provider's openly streamable tracks, and this app intentionally excludes recordings marked unavailable or paywalled by Audius. You do not need a Spotify Premium subscription to play these Audius tracks.
+Imported local songs stay in browser IndexedDB; saved favorites, playlists and link/stream metadata stay in browser localStorage. Online streams play from the upstream providers (who receive ordinary requests). No self-hosted tracking, payment information collection or account database.
 
-**Catalog limitation:** Audius is **not** a mirror of Spotify's licensed catalog. Latest means latest releases *on Audius*, not every new Bollywood, Punjabi, Hindi or international commercial hit. Some artists and tracks will not exist there. Spotify links still open in Spotify's official embeds and obey Spotify's limitations. Do not claim universal free access to Spotify's music.
+### Development
 
-**Network:** Free Music requires an internet connection and Audius API availability. The API currently documents read-only public access, but rate limits, region restrictions, browser playback or upstream policy changes may affect specific songs. If the feed fails to load, the app shows an error and allows retrying. No secret is bundled with frontend code.
+- \`src/audius.mjs\` — Audius search and stream URLs
+- \`src/providers.mjs\` — Openverse, Wikimedia Commons, Radio Browser adapters + multi-source aggregator
+- \`src/free-catalog.mjs\` — source selector, search, listings and pagination
+- \`src/app.mjs\` — player, queues, local files, favorites and playlists
+- \`tests/*.test.mjs\` — deterministic test fixtures and error handling
+- \`.github/workflows/tests.yml\` — GitHub Actions syntax checks + unit tests
 
-## What works
-
-- Play three original, browser-synthesized demonstration tracks with progress controls, volume, queue, shuffle and repeat.
-- Upload MP3, AAC, M4A, FLAC (depending on browser codec support), OGG, WAV etc. Files are kept in your browser's IndexedDB, not uploaded to any server.
-- Create collections, like songs and add songs/Spotify links to playlists. Library, likes and playlists persist locally.
-- Search all saved items, import via file picker or drag-and-drop.
-- Save a Spotify track/album/playlist/artist/episode/show URL or Spotify URI, and open it through an **official Spotify embed**. This is an official embedded player, not reverse-engineered streaming.
-- Responsive desktop/mobile layout.
-
-## What's deliberately not included
-
-- No Spotify DRM removal, Premium entitlement bypass, ad blocking/bypass, downloaded Spotify streams, private API automation, or unauthorized use of copyrighted Spotify audio.
-- Spotify embeds may show a shortened preview or require account login depending on user, territory and content. Ads and limitations are controlled by Spotify.
-- Local audio filenames are displayed as song names; ID3 album-art extraction is not implemented.
-- Metadata for a Spotify link defaults to its content type and ID; you can provide a useful title when adding it.
-
-## Privacy
-
-Local files are stored in IndexedDB (`spotbridge-music`). Playlist and saved-link data is stored in `localStorage`, all within your browser's origin. The app has no backend, telemetry or account system. Official Spotify embeds contact Spotify domains. Google Fonts are optional network dependencies with system-font fallback.
-
-## Reverse-engineering methodology
-
-The GitHub topic URL supplied by the user is a topic listing, *not* an app template. The REA project describes agent-assisted analysis of app behavior. See [RESEARCH.md](./RESEARCH.md) for a scope distinction and reproducible, lawful investigation guide. This project implements a clean-room music player from observable user-facing behavior; **REA was not run against Spotify executables or binaries here.**
+This application is independent of Spotify, Openverse, Audius, Wikimedia and Radio Browser and is not endorsed by those services. No scraping, DRM bypass, copyrighted catalog rehosting or premium-feature circumvention is part of this project.
 
 ## License
 
-Original UI and source code authored for this prototype. The short instrumental demos are synthesized in the browser from original code, with no third-party audio hosting. Spotify is a trademark of Spotify AB; this project is independent and unaffiliated.
-
-## Repository and development
-
-Repository: https://github.com/humaniods/spotymusic
-
-This project includes GitHub Actions tests. To contribute, clone the repository, make your changes on a branch, run `npm test`, and open a pull request.
-
-Demo tracks are generated locally at runtime by `src/demo-audio.mjs` as PCM WAV. They are placeholders, not Spotify catalog audio.
+[MIT](./LICENSE) for original application source code. Media accessed through the app carries its own copyright and license terms.

@@ -1,120 +1,107 @@
-import { fetchFreeTracks, PAGE_SIZE } from './audius.mjs';
-import { escapeHtml } from './core.mjs';
+import {searchAcross, SOURCES, SOURCE_LIMIT} from './providers.mjs';
+import {escapeHtml} from './core.mjs';
 
 const results = document.querySelector('#free-results');
 const status = document.querySelector('#free-status');
 const more = document.querySelector('#free-more');
-const searchForm = document.querySelector('#free-search-form');
-const searchInput = document.querySelector('#free-query');
-const modeButtons = [...document.querySelectorAll('[data-free-mode]')];
+const form = document.querySelector('#free-search-form');
+const input = document.querySelector('#free-query');
+const providerSelect = document.querySelector('#free-provider');
+const filters = [...document.querySelectorAll('[data-free-mode]')];
+let mode='latest', query='', provider='all', offset=0, started=false;
+let controller, serial=0, busy=false;
+const displayed = new Set();
 
-let mode = 'latest';
-let query = '';
-let offset = 0;
-let busy = false;
-let started = false;
-let requestNumber = 0;
-let controller;
-const visibleIds = new Set();
-
-function row(track) {
-  const id = escapeHtml(track.id);
-  const title = escapeHtml(track.title);
-  const artist = escapeHtml(track.artist);
-  return '<div class="track-item" data-id="' + id + '">' +
-    '<button class="row-play" data-action="play" data-id="' + id + '" aria-label="Play ' + title + '">' +
-    '<svg><use href="#i-play"/></svg></button>' +
-    '<div class="track-cover free-cover"><span>♫</span></div>' +
-    '<div style="min-width:0"><div class="track-title">' + title + '</div>' +
-    '<div class="track-artist">' + artist + '</div></div>' +
-    '<div class="track-kind">AUDIUS · FREE STREAM</div>' +
-    '<button class="icon-button row-like" data-action="like" data-id="' + id + '" title="Like" aria-label="Like ' + title + '"><svg><use href="#i-heart"/></svg></button>' +
-    '<button class="icon-button row-add" data-action="add" data-id="' + id + '" title="Add to playlist" aria-label="Add ' + title + ' to playlist"><svg><use href="#i-plus"/></svg></button></div>';
+function renderRow(track) {
+  const id=escapeHtml(track.id);
+  const title=escapeHtml(track.title);
+  const artist=escapeHtml(track.artist);
+  const source=escapeHtml(SOURCES[track.provider] || 'Music');
+  const license=escapeHtml(track.license || 'See source terms');
+  const page=escapeHtml(track.page || 'https://audius.co');
+  const label=track.live?'LIVE RADIO':source.toUpperCase();
+  return '<div class="track-item" data-id="'+id+'">' +
+    '<button class="row-play" data-action="play" data-id="'+id+'" aria-label="Play '+title+'">' +
+      '<svg><use href="#i-play"/></svg></button>' +
+    '<div class="track-cover free-cover"><span>'+(track.live?'📻':'♫')+'</span></div>' +
+    '<div class="free-track-details"><div class="track-title">'+title+'</div><div class="track-artist">'+artist+'</div>' +
+      '<a class="free-source-credit" href="'+page+'" target="_blank" rel="noopener noreferrer" title="Original source and attribution">'+source+' · '+license+' ↗</a></div>' +
+    '<div class="track-kind">'+label+'</div>' +
+    '<button class="icon-button row-like" data-action="like" data-id="'+id+'" title="Like" aria-label="Like '+title+'"><svg><use href="#i-heart"/></svg></button>' +
+    '<button class="icon-button row-add" data-action="add" data-id="'+id+'" title="Add to playlist" aria-label="Add '+title+' to playlist"><svg><use href="#i-plus"/></svg></button></div>';
 }
-
-function updateModes() {
-  for (const button of modeButtons) {
-    const active = button.dataset.freeMode === mode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+function updateFilter() {
+  for(const button of filters) {
+    const active=button.dataset.freeMode===mode;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-pressed',String(active));
   }
 }
-
-async function load(reset = false) {
-  if (!reset && busy) return;
-  if (controller) controller.abort();
-  controller = new AbortController();
-  const requestId = ++requestNumber;
-  busy = true;
-  more.disabled = true;
-  more.hidden = true;
-  if (reset) {
-    offset = 0;
-    visibleIds.clear();
-    results.innerHTML = '';
-  }
-  status.textContent = 'Loading ' + (mode === 'latest' ? 'new releases' : mode === 'trending' ? 'this week’s trending tracks' : 'search results') + '…';
+function heading() {
+  if(mode==='search') return 'search results for “'+query+'”';
+  return mode==='latest'?'new and discoverable music':'popular music and live radio';
+}
+async function load(reset=false) {
+  if(busy&&!reset) return;
+  controller?.abort();
+  controller=new AbortController();
+  const request=++serial;
+  busy=true;
+  if(reset) {offset=0;displayed.clear();results.replaceChildren();}
+  more.disabled=true;
+  more.hidden=true;
+  status.textContent='Searching '+(provider==='all'?'all four free sources':SOURCES[provider])+' for '+heading()+'…';
   try {
-    const tracks = await fetchFreeTracks({ mode, query, offset, limit: PAGE_SIZE, signal: controller.signal });
-    if (requestId !== requestNumber) return;
-    window.dispatchEvent(new CustomEvent('spotymusic:register-online', { detail: tracks }));
-    const unseen = tracks.filter(track => !visibleIds.has(track.id));
-    for (const item of unseen) visibleIds.add(item.id);
-    results.insertAdjacentHTML('beforeend', unseen.map(row).join(''));
-    offset += PAGE_SIZE;
-    const count = visibleIds.size;
-    status.textContent = count
-      ? count + ' playable track' + (count === 1 ? '' : 's') + ' · streamed by Audius'
-      : 'No freely streamable tracks found. Try another search.';
-    more.hidden = tracks.length < PAGE_SIZE || unseen.length === 0;
-  } catch (error) {
-    if (requestId !== requestNumber || error?.name === 'AbortError') return;
-    status.textContent = 'Free catalog could not load (' + String(error.message || 'network error') + '). Check connection or try again.';
-    more.hidden = false;
-    more.textContent = 'Retry';
+    const data=await searchAcross({provider,mode,query,offset,limit:SOURCE_LIMIT,signal:controller.signal});
+    if(request!==serial) return;
+    window.dispatchEvent(new CustomEvent('spotymusic:register-online',{detail:data.tracks}));
+    const fresh=data.tracks.filter(t=>!displayed.has(t.id));
+    fresh.forEach(t=>displayed.add(t.id));
+    results.insertAdjacentHTML('beforeend',fresh.map(renderRow).join(''));
+    offset+=SOURCE_LIMIT;
+    const failed=data.errors.length ? ' · '+data.errors.map(e=>SOURCES[e.provider]+' unavailable').join(', ') : '';
+    status.textContent=(displayed.size ? displayed.size+' listings found' : 'No streamable results found')+
+      ' · '+(provider==='all'?'All free sources':SOURCES[provider])+failed;
+    more.hidden= !fresh.length;
+    more.textContent='Load more';
+  } catch(error) {
+    if(request!==serial||error?.name==='AbortError')return;
+    status.textContent='Catalog request failed: '+String(error?.message || error)+'. Try again.';
+    more.textContent='Retry';
+    more.hidden=false;
   } finally {
-    if (requestId === requestNumber) {
-      busy = false;
-      more.disabled = false;
-    }
+    if(request===serial){busy=false;more.disabled=false;}
   }
 }
-
-for (const button of modeButtons) button.addEventListener('click', () => {
-  mode = button.dataset.freeMode;
-  query = '';
-  updateModes();
-  started = true;
-  more.textContent = 'Load more';
+function start() {
+  started=true;
+  query='';
+  mode='latest';
+  input.value='';
+  updateFilter();
   load(true);
+}
+filters.forEach(button=>button.addEventListener('click',()=>{
+  mode=button.dataset.freeMode;query='';input.value='';
+  updateFilter();started=true;load(true);
+}));
+providerSelect.addEventListener('change',()=>{
+  provider=providerSelect.value;
+  if(mode==='search'&&!query){mode='latest';updateFilter();}
+  started=true;load(true);
 });
-
-searchForm.addEventListener('submit', event => {
+form.addEventListener('submit',event=>{
   event.preventDefault();
-  query = searchInput.value.trim().slice(0, 100);
-  if (!query) {
-    status.textContent = 'Type a song or artist name to search.';
-    searchInput.focus();
-    return;
-  }
-  mode = 'search';
-  updateModes();
-  started = true;
-  more.textContent = 'Load more';
-  load(true);
+  query=input.value.trim().slice(0,100);
+  if(!query){input.focus();status.textContent='Enter a song, artist, recording or station name.';return;}
+  mode='search';updateFilter();started=true;load(true);
 });
-
-more.addEventListener('click', () => {
-  if (more.textContent === 'Retry') {
-    more.textContent = 'Load more';
-    load(false);
-  } else load(false);
+more.addEventListener('click',()=>load(false));
+document.addEventListener('click',event=>{
+  if(event.target.closest('[data-page="free"]')&&!started)start();
 });
-
-document.addEventListener('click', event => {
-  if (event.target.closest('[data-page="free"]') && !started) {
-    started = true;
-    updateModes();
-    load(true);
-  }
+// When page is opened using keyboard or navigation, load the first page as well.
+document.addEventListener('keydown',event=>{
+  if(['Enter',' '].includes(event.key) &&
+      event.target.closest('[data-page="free"]')&&!started) start();
 });
