@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#090b0d">
-  <meta name="description" content="SpotBridge: a personal music library and official Spotify embed dashboard.">
-  <title>SpotBridge — Your music, your space</title>
+  <meta name="description" content="SpotyMusic: stream openly available tracks from Audius, Openverse, Wikimedia Commons and online radio.">
+  <title>SpotyMusic — Free & open music discovery</title>
   <link rel="stylesheet" href="./src/styles.css">
   <link rel="stylesheet" href="./src/free-music.css">
 </head>
@@ -31,7 +31,7 @@
   </svg>
   <div id="app">
     <aside class="sidebar">
-      <button class="brand" id="brand-home" type="button"><span class="brand-mark"><span></span><span></span><span></span></span> SpotBridge <small>beta</small></button>
+      <button class="brand" id="brand-home" type="button"><span class="brand-mark"><span></span><span></span><span></span></span> SpotyMusic <small>open</small></button>
       <div class="sidebar-section nav-main">
         <button class="nav-item active" data-page="home"><svg><use href="#i-home"/></svg> Home</button>
         <button class="nav-item" data-page="search"><svg><use href="#i-search"/></svg> Search</button>
@@ -48,30 +48,31 @@
       <header class="topbar"><div class="crumb"><span class="orb"></span><span id="breadcrumb">Your listening space</span></div><div class="top-actions"><button class="secondary small" id="add-spotify"><svg><use href="#i-plus"/></svg> Spotify link</button><button class="primary small" id="upload-songs"><svg><use href="#i-upload"/></svg> Add music</button></div></header>
       <div class="scroll-area" id="main-scroll">
         <section id="home-panel" class="page-panel">
-          <div class="hero"><div class="hero-text"><span class="eyebrow"><span class="green-dot"></span> YOUR MUSIC SPACE</span><h1>All your music.<br><em>One beautiful place.</em></h1><p>Play your own tracks, explore independently released music for free via Audius, and save Spotify links through official embeds. No SpotyMusic subscription.</p><div class="hero-actions"><button class="primary" id="hero-upload"><svg><use href="#i-upload"/></svg> Add your music</button><button class="ghost" data-page="free">Browse free music <span>♫</span></button><button class="ghost" id="hero-spotify">Paste Spotify link <span>↗</span></button></div></div><div class="hero-art"><div class="record-glow"></div><div class="record"><div class="record-inner"><div class="record-label">SB<br>RADIO</div></div></div><div class="float-note note-one">♪</div><div class="float-note note-two">♫</div></div></div>
+          <div class="hero"><div class="hero-text"><span class="eyebrow"><span class="green-dot"></span> YOUR MUSIC SPACE</span><h1>All your music.<br><em>One beautiful place.</em></h1><p>Listen across four open/free catalogs, discover licensed recordings, tune in to live radio, and play local files. No subscription in SpotyMusic.</p><div class="hero-actions"><button class="primary" id="hero-upload"><svg><use href="#i-upload"/></svg> Add your music</button><button class="ghost" data-page="free">Browse free music <span>♫</span></button><button class="ghost" id="hero-spotify">Paste Spotify link <span>↗</span></button></div></div><div class="hero-art"><div class="record-glow"></div><div class="record"><div class="record-inner"><div class="record-label">SB<br>RADIO</div></div></div><div class="float-note note-one">♪</div><div class="float-note note-two">♫</div></div></div>
           <div class="section-heading"><div><span class="eyebrow">START LISTENING</span><h2>Featured sessions</h2></div><span class="section-note">Original demo audio · ready to play</span></div>
           <div class="album-grid" id="featured-grid"></div>
           <div class="section-heading"><div><span class="eyebrow">CURATED BY YOU</span><h2>Recently added</h2></div><button class="text-link" data-page="library">View library →</button></div><div id="recent-list" class="track-list"></div>
         </section>
         <section id="free-panel" class="page-panel hidden">
-          <div class="page-intro"><span class="eyebrow">STREAM FREE · POWERED BY AUDIUS</span><h1>Discover music, no subscription</h1>
-            <p>Explore freshly released and trending tracks from independent artists on Audius. Full-song streaming is available for tracks their creators make freely streamable. The catalog is not Spotify's and does not guarantee every mainstream hit.</p></div>
+          <div class="page-intro"><span class="eyebrow">4 FREE OPEN MUSIC SOURCES</span><h1>Discover music. Pay nothing.</h1>
+            <p>Discover independent tracks on Audius, openly licensed audio from Openverse and Wikimedia Commons, plus free internet radio. Track playback and availability depend on each source.</p></div>
           <form id="free-search-form" class="free-search" role="search">
             <label class="free-search-label" for="free-query">Search the free streaming catalog</label>
             <div class="free-search-row"><input id="free-query" type="search" autocomplete="off" placeholder="Song or artist name…" maxlength="100" aria-label="Search free music">
               <button class="primary small" type="submit">Search music</button></div>
           </form>
+          <div class="free-source-select"><label for="free-provider">Music source</label><select id="free-provider" aria-label="Filter music by source"><option value="all">All 4 sources</option><option value="audius">Audius · tracks</option><option value="openverse">Openverse · CC audio</option><option value="commons">Wikimedia Commons · open audio</option><option value="radio">Radio Browser · live radio</option></select></div>
           <div class="free-filters" role="group" aria-label="Music discovery">
             <button type="button" class="secondary small active" data-free-mode="latest" aria-pressed="true">New releases</button>
-            <button type="button" class="secondary small" data-free-mode="trending" aria-pressed="false">Trending this week</button>
+            <button type="button" class="secondary small" data-free-mode="trending" aria-pressed="false">Popular &amp; radio</button>
           </div>
           <p class="section-note" id="free-status" role="status" aria-live="polite">Choose New releases to load the Audius catalog.</p>
           <div class="track-list" id="free-results"></div>
           <div class="free-more-wrap"><button type="button" class="secondary small" id="free-more" hidden>Load more</button></div>
-          <p class="free-disclaimer">No checkout or subscription in SpotyMusic. Audio is streamed directly from <a href="https://audius.co" target="_blank" rel="noopener noreferrer">Audius</a>. Some tracks may be unavailable or require access on the provider. Official Spotify embeds still have Spotify's restrictions.</p>
+          <p class="free-disclaimer">No payments, accounts or premium unlocks inside SpotyMusic. Music is provided by <a href="https://audius.co" target="_blank" rel="noopener noreferrer">Audius</a>, <a href="https://openverse.org" target="_blank" rel="noopener noreferrer">Openverse</a>, <a href="https://commons.wikimedia.org" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> and <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">Radio Browser</a>. Click each song’s source/credit link for licensing and attribution. Online radio is a live broadcast, not song-on-demand. A free API does not guarantee every popular commercial release is available.</p>
         </section>
-        <section id="search-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">FIND YOUR SOUND</span><h1>Search your library</h1><p>Find saved Spotify links, original demos and your own audio.</p></div><div class="searchbox"><svg><use href="#i-search"/></svg><input id="search-input" type="search" placeholder="Search songs, artists, Spotify links…" autocomplete="off"></div><div class="section-heading"><h2>Results</h2><span id="search-count" class="section-note"></span></div><div class="track-list" id="search-results"></div></section>
-        <section id="library-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">YOUR COLLECTION</span><h1>Your Library</h1><p>Everything you brought into SpotBridge, in one place.</p></div><div class="library-toolbar"><button id="library-upload" class="primary small"><svg><use href="#i-upload"/></svg> Add audio files</button><button id="library-spotify" class="secondary small"><svg><use href="#i-plus"/></svg> Save Spotify link</button></div><div class="section-heading"><h2>All tracks & links</h2><span id="library-count" class="section-note"></span></div><div class="track-list" id="library-list"></div></section>
+        <section id="search-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">FIND YOUR SOUND</span><h1>Search your library</h1><p>Find saved Spotify links, free-source tracks, original demos and your own audio.</p></div><div class="searchbox"><svg><use href="#i-search"/></svg><input id="search-input" type="search" placeholder="Search songs, artists, Spotify links…" autocomplete="off"></div><div class="section-heading"><h2>Results</h2><span id="search-count" class="section-note"></span></div><div class="track-list" id="search-results"></div></section>
+        <section id="library-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">YOUR COLLECTION</span><h1>Your Library</h1><p>Your music, saved open tracks and favorite stations.</p></div><div class="library-toolbar"><button id="library-upload" class="primary small"><svg><use href="#i-upload"/></svg> Add audio files</button><button id="library-spotify" class="secondary small"><svg><use href="#i-plus"/></svg> Save Spotify link</button></div><div class="section-heading"><h2>All tracks & links</h2><span id="library-count" class="section-note"></span></div><div class="track-list" id="library-list"></div></section>
         <section id="collection-panel" class="page-panel hidden"><div class="collection-hero"><div class="collection-icon" id="collection-icon">♥</div><div><span class="eyebrow">PLAYLIST</span><h1 id="collection-title">Liked Songs</h1><p id="collection-subtitle">Your favourite sounds.</p></div></div><div class="track-list" id="collection-list"></div></section>
         <footer class="main-footer">SpotBridge is an independent project. Spotify is a trademark of its owner. Spotify embeds are served by Spotify; playback availability is determined by Spotify.</footer>
       </div>
