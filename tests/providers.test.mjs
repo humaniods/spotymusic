@@ -93,5 +93,5 @@ test('saved tracks reject fabricated provider IDs and executable URLs',()=>{
 
 test('Unsupported provider is rejected and provider fetch responses validated',async()=>{
   await assert.rejects(searchAcross({provider:'anything'}),/Unknown source/);
-  await assert.rejects(fetchProvider('openverse',{},async()=>({ok:true,json:async()=>({results:'bad'})})),/Unexpected Openverse/);
+  await assert.rejects(fetchProvider('openverse',{mode:'search',query:'piano'},async()=>({ok:true,json:async()=>({results:'bad'})})),/Unexpected Openverse/);
 });
