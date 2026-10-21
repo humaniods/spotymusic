@@ -1,5 +1,6 @@
 import { parseSpotifyUrl, formatTime, nextIndex, searchItems, escapeHtml, safeFile } from './core.mjs';
 import { makeDemo } from './demo-audio.mjs';
+import { reviveFreeTrack } from './audius.mjs';
 
 const DEMOS = [
   {id:'demo:golden-hour',title:'Golden Hour',artist:'SpotBridge Sessions',source:makeDemo(0),kind:'demo',art:0},
@@ -17,7 +18,7 @@ const ART = [
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const audio = $('#audio');
-const state = {tracks:[...DEMOS],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map()};
+const state = {tracks:[...DEMOS],online:[],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map()};
 let db = null, toastTimer;
 
 function readJSON(key, fallback) {
@@ -28,6 +29,8 @@ function persist() {
     localStorage.setItem('spotbridge:v1:links',JSON.stringify(state.links));
     localStorage.setItem('spotbridge:v1:liked',JSON.stringify([...state.liked]));
     localStorage.setItem('spotbridge:v1:playlists',JSON.stringify(state.playlists));
+    const retained = state.online.filter(item => state.liked.has(item.id) || state.playlists.some(list => list.ids.includes(item.id))).slice(-150);
+    localStorage.setItem('spotbridge:v1:online',JSON.stringify(retained.map(({id,title,artist,art}) => ({id,title,artist,art}))));
   } catch { toast('Storage unavailable; changes may not persist'); }
 }
 function openDB() {
@@ -43,7 +46,7 @@ function dbPut(record){return new Promise((resolve,reject)=>{if(!db)return rejec
 function dbAll(){return new Promise((resolve,reject)=>{if(!db)return resolve([]);const req=db.transaction('audio').objectStore('audio').getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 function sanitizeLinks(links){return Array.isArray(links)?links.filter(entry=>parseSpotifyUrl(entry?.url)).slice(0,1000).map(entry=>({...parseSpotifyUrl(entry.url),title:String(entry.title||'Spotify '+entry.kind).slice(0,100),artist:'Spotify · Official embed',kind:'spotify',spotifyKind:parseSpotifyUrl(entry.url).kind,art:4})):[];}
 function isValidPlaylist(value){return value&&typeof value.name==='string'&&Array.isArray(value.ids)&&typeof value.id==='string';}
-function allItems(){return [...state.tracks,...state.links];}
+function allItems(){return [...state.tracks,...state.online,...state.links];}
 function getItem(id){return allItems().find(t=>t.id===id);}
 function isLiked(id){return state.liked.has(id);}
 function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#toggle-play)');controls.forEach(btn=>btn.disabled=state.current?.kind==='spotify');$('#toggle-play').disabled=state.current?.kind==='spotify';$('#seek').disabled=state.current?.kind==='spotify';$('#volume').disabled=state.current?.kind==='spotify';}
@@ -52,15 +55,15 @@ function artStyle(item){return ART[Number.isInteger(item?.art)?item.art%ART.leng
 function glyph(item){return item?.kind==='spotify'?'◉':item?.kind==='demo'?'♫':'♪';}
 function icon(name){return `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;}
 function likedClass(item){return isLiked(item.id)?' liked':'';}
-function itemRow(item,index){const active=item.id===state.current?.id;return `<div class="track-item${active?' selected':''}" data-id="${escapeHtml(item.id)}"><button class="row-play" data-action="play" data-id="${escapeHtml(item.id)}" aria-label="Play ${escapeHtml(item.title)}">${icon('play')}</button><div class="track-cover" style="background:${artStyle(item)}"><span>${glyph(item)}</span></div><div style="min-width:0"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><div class="track-kind">${item.kind==='spotify'?`SPOTIFY ${escapeHtml(item.spotifyKind).toUpperCase()}`:item.kind==='demo'?'ORIGINAL DEMO':'LOCAL AUDIO'}</div><button class="icon-button row-like${likedClass(item)}" data-action="like" data-id="${escapeHtml(item.id)}" title="Like" aria-label="Like ${escapeHtml(item.title)}">${icon('heart')}</button><button class="icon-button row-add" data-action="add" data-id="${escapeHtml(item.id)}" title="Add to playlist" aria-label="Add ${escapeHtml(item.title)} to playlist">${icon('plus')}</button></div>`;}
+function itemRow(item,index){const active=item.id===state.current?.id;return `<div class="track-item${active?' selected':''}" data-id="${escapeHtml(item.id)}"><button class="row-play" data-action="play" data-id="${escapeHtml(item.id)}" aria-label="Play ${escapeHtml(item.title)}">${icon('play')}</button><div class="track-cover" style="background:${artStyle(item)}"><span>${glyph(item)}</span></div><div style="min-width:0"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><div class="track-kind">${item.kind==='spotify'?`SPOTIFY ${escapeHtml(item.spotifyKind).toUpperCase()}`:item.kind==='demo'?'ORIGINAL DEMO':item.kind==='audius'?'AUDIUS FREE STREAM':'LOCAL AUDIO'}</div><button class="icon-button row-like${likedClass(item)}" data-action="like" data-id="${escapeHtml(item.id)}" title="Like" aria-label="Like ${escapeHtml(item.title)}">${icon('heart')}</button><button class="icon-button row-add" data-action="add" data-id="${escapeHtml(item.id)}" title="Add to playlist" aria-label="Add ${escapeHtml(item.title)} to playlist">${icon('plus')}</button></div>`;}
 function empty(text,sub='Use the buttons above to add something.'){return `<div class="empty-state"><b>${escapeHtml(text)}</b>${escapeHtml(sub)}</div>`;}
 function renderRows(selector,items,emptyMsg='No items yet'){const container=$(selector);container.innerHTML=items.length?items.map(itemRow).join(''):empty(emptyMsg);}
 function renderFeatured(){ $('#featured-grid').innerHTML=DEMOS.map(item=>`<article class="album-card" data-action="play" data-id="${item.id}" tabindex="0" role="button" aria-label="Play ${item.title}"><div class="album-art" style="background:${artStyle(item)}"><div class="album-symbol">${glyph(item)}</div></div><div class="album-meta"><div><b>${item.title}</b><span>${item.artist}</span></div><button class="album-play" data-action="play" data-id="${item.id}" aria-label="Play ${item.title}">${icon('play')}</button></div></article>`).join('');}
 function renderSidebar(){const nav=$('#playlist-nav');nav.innerHTML=state.playlists.length?state.playlists.map(p=>`<button class="playlist-link${state.page==='playlist'&&state.activePlaylist===p.id?' active':''}" data-action="playlist" data-id="${escapeHtml(p.id)}">${icon('music')}<span>${escapeHtml(p.name)}</span></button>`).join(''):'<div class="muted-side">Create a playlist to organize your music.</div>'; $$('.nav-item').forEach(btn=>btn.classList.toggle('active',btn.dataset.page===state.page));}
 function renderPage(){
   renderSidebar();
-  ['home-panel','search-panel','library-panel','collection-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
-  const breadcrumb={home:'Your listening space',search:'Find your music',library:'Your collection',liked:'Your favourites',playlist:'Your playlist'};
+  ['home-panel','search-panel','library-panel','collection-panel','free-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
+  const breadcrumb={home:'Your listening space',search:'Find your music',free:'Free music',library:'Your collection',liked:'Your favourites',playlist:'Your playlist'};
   $('#breadcrumb').textContent=breadcrumb[state.page]||breadcrumb.home;
   if(state.page==='home'){
     $('#home-panel').classList.remove('hidden');
@@ -68,6 +71,8 @@ function renderPage(){
   } else if(state.page==='search'){
     $('#search-panel').classList.remove('hidden');
     const items=searchItems(allItems(),state.query);$('#search-count').textContent=`${items.length} result${items.length===1?'':'s'}`;renderRows('#search-results',items,'Nothing matched your search');
+  } else if(state.page==='free'){
+    $('#free-panel').classList.remove('hidden');
   } else if(state.page==='library'){
     $('#library-panel').classList.remove('hidden');
     const items=allItems();$('#library-count').textContent=`${items.length} saved items`;renderRows('#library-list',items,'No tracks saved');
@@ -88,7 +93,7 @@ function updatePlayIcon(){const playing=!audio.paused&&state.current?.kind!=='sp
 function updateFooter(){
  const item=state.current;$('#player-title').textContent=item?.title||'Nothing playing yet';$('#player-artist').textContent=item?.artist||'Choose a track';$('#player-cover').textContent=item?glyph(item):'♫';$('#player-cover').style.background=item?artStyle(item):ART[3];
  $('#player-like').disabled=!item;$('#player-like').classList.toggle('liked',!!item&&isLiked(item.id));
- $('#playback-mode').textContent=item?.kind==='spotify'?'SPOTIFY EMBED':'LOCAL PLAYER';
+ $('#playback-mode').textContent=item?.kind==='spotify'?'SPOTIFY EMBED':item?.kind==='audius'?'AUDIUS · FREE STREAM':'LOCAL PLAYER';
  $('#right-title').textContent=item?.title||'Your soundtrack starts here';$('#right-artist').textContent=item?.artist||'Pick something to play';
  $('#right-cover').style.background=item?artStyle(item):ART[3];
  $('#right-cover').querySelector('.right-cover-glyph').textContent=item?glyph(item):'♫';
@@ -115,6 +120,14 @@ function openSpotifyDialog(){$('#spotify-form').reset();$('#modal-error').textCo
 function saveSpotifyLink(event){event.preventDefault();const parsed=parseSpotifyUrl($('#spotify-url').value);if(!parsed){$('#modal-error').textContent='Please enter a valid open.spotify.com URL or spotify: URI.';return;}const existing=state.links.find(link=>link.id===parsed.id);if(existing){$('#spotify-dialog').close();playItem(existing.id);navigate('library');return;}const title=$('#spotify-name').value.trim().slice(0,100)||`Spotify ${parsed.kind} · ${parsed.spotifyId.slice(0,8)}`;const item={...parsed,title,artist:'Spotify · Official embed',kind:'spotify',spotifyKind:parsed.kind,art:4};state.links.unshift(item);persist();$('#spotify-dialog').close();navigate('library');playItem(item.id);toast('Spotify link saved');}
 async function importFiles(files){const valid=[...files].filter(safeFile);if(!valid.length){toast('No supported audio files (max 200 MB per file)');return;}let added=0;for(const file of valid){const id=`local:${crypto.randomUUID()}`;const item={id,title:file.name.replace(/\.[^.]+$/,'').replace(/[_-]/g,' ').trim()||file.name,artist:'Your local files',kind:'local',art:3};const url=URL.createObjectURL(file);state.objectUrls.set(id,url);state.tracks.push(item);try{await dbPut({id,item,file});}catch{ /* Playback still works for this session. */ }added++;}navigate('library');toast(`${added} audio file${added===1?'':'s'} added`);$('#file-input').value='';}
 function events(){
+  window.addEventListener('spotymusic:register-online', event => {
+    if (!Array.isArray(event.detail)) return;
+    const tracks = new Map(state.online.map(item => [item.id,item]));
+    for (const item of event.detail.slice(0, 50)) {
+      if (item?.kind === 'audius' && /^audius:[A-Za-z0-9_-]{2,80}$/.test(item.id) && item.source?.startsWith('https://api.audius.co/v1/tracks/')) tracks.set(item.id,item);
+    }
+    state.online = [...tracks.values()].slice(-250);
+  });
   document.addEventListener('click',event=>{
     const click=event.target.closest('[data-action]');if(click){const {action,id}=click.dataset;if(action==='play'){const collection=click.closest('.track-list');const ids=collection?[...collection.querySelectorAll('.track-item')].map(row=>row.dataset.id):DEMOS.map(t=>t.id);playItem(id,ids);return;}if(action==='like')return toggleLike(id);if(action==='add')return addToPlaylist(id);if(action==='playlist')return navigate('playlist',id);}
     const nav=event.target.closest('[data-page]');if(nav)navigate(nav.dataset.page);
@@ -142,6 +155,7 @@ function events(){
 }
 async function init(){
   state.links=sanitizeLinks(readJSON('links',[]));
+  state.online=(Array.isArray(readJSON('online',[])) ? readJSON('online',[]) : []).map(reviveFreeTrack).filter(Boolean).slice(-150);
   state.liked=new Set(readJSON('liked',[]).filter(id=>typeof id==='string'));
   state.playlists=readJSON('playlists',[]).filter(isValidPlaylist).slice(0,100).map(p=>({id:p.id,name:p.name.slice(0,60),ids:p.ids.filter(id=>typeof id==='string')}));
   try{db=await openDB();const rows=await dbAll();for(const record of rows){if(!record?.file||!record?.item?.id)continue;state.tracks.push(record.item);state.objectUrls.set(record.item.id,URL.createObjectURL(record.file));}}catch(error){console.warn('Browser database unavailable',error);}
