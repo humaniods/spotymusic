@@ -18,6 +18,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check src/audius.mjs
+          node --check src/providers.mjs
           node --check src/free-catalog.mjs
           node --check src/app.mjs
       - run: npm test
