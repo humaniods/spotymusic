@@ -47,8 +47,10 @@ function dbPut(record){return new Promise((resolve,reject)=>{if(!db)return rejec
 function dbAll(){return new Promise((resolve,reject)=>{if(!db)return resolve([]);const req=db.transaction('audio').objectStore('audio').getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 function sanitizeLinks(links){return Array.isArray(links)?links.filter(entry=>parseSpotifyUrl(entry?.url)).slice(0,1000).map(entry=>({...parseSpotifyUrl(entry.url),title:String(entry.title||'Spotify '+entry.kind).slice(0,100),artist:'Spotify · Official embed',kind:'spotify',spotifyKind:parseSpotifyUrl(entry.url).kind,art:4})):[];}
 function isValidPlaylist(value){return value&&typeof value.name==='string'&&Array.isArray(value.ids)&&typeof value.id==='string';}
-function allItems(){return [...state.tracks,...state.online,...state.links];}
-function getItem(id){return allItems().find(t=>t.id===id);}
+function allItems(){return [...state.tracks,...state.links];}
+// Browsed listings are not "saved", so they stay out of allItems() and the Library
+// count, but must still resolve for likes, playlists and the queue.
+function getItem(id){return allItems().find(t=>t.id===id)||state.online.find(t=>t.id===id);}
 function isLiked(id){return state.liked.has(id);}
 function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#toggle-play)');controls.forEach(btn=>btn.disabled=state.current?.kind==='spotify');$('#toggle-play').disabled=state.current?.kind==='spotify';$('#seek').disabled=state.current?.kind==='spotify' || state.current?.live===true;$('#volume').disabled=state.current?.kind==='spotify';}
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),2900);}

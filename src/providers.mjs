@@ -54,7 +54,9 @@ export function mapOpenverse(raw) {
   if (!source) return null;
   const audioType = clip(raw.filetype,12).replace(/^\./,'');
   if (!AUDIO_TYPES.test(new URL(source).pathname) &&
-      !/^(mp3|ogg|oga|wav|flac|m4a|aac|opus|webm)$/i.test(audioType)) return null;
+      // Unanchored on purpose: Openverse serves Jamendo's bitrate-suffixed labels
+      // ("mp32", "ogg3"), which an exact match silently rejected for every result.
+      !/^(mp3|ogg|oga|wav|flac|m4a|aac|opus|webm)/i.test(audioType)) return null;
   const id = clip(raw.id,120);
   if (!ID.test(id)) return null;
   const license = clip(raw.license,40) + (raw.license_version ? ' ' + clip(raw.license_version,10) : '');
@@ -70,19 +72,32 @@ export function commonsUrl({mode='search',query='',offset=0,limit=SOURCE_LIMIT}=
   const q = term + ' filetype:audio';
   Object.entries({
     action:'query', format:'json', origin:'*', generator:'search',
-    gsrsearch:q, gsrnamespace:'6', gsrlimit:String(Math.min(20,Math.max(1,limit))),
+    gsrsearch:q, gsrnamespace:'6', gsrlimit:String(Math.min(40,Math.max(1,limit)*3)),
     gsroffset:String(Math.max(0,offset)), prop:'imageinfo', iiprop:'url|extmetadata',
     iiextmetadatafilter:'LicenseShortName|LicenseUrl|Artist|Credit|AttributionRequired'
   }).forEach(([key,value])=>url.searchParams.set(key,value));
   return url.toString();
 }
 
-export function mapCommons(page) {
+// Commons is full of Wikipedia pronunciation and spoken-article recordings, and
+// "filetype:audio" happily matches them — a "coldplay" query returned starfish
+// audio and a Dutch Wikipedia article read aloud.
+const SPOKEN_WORD = /^[A-Za-z]{2}(-[A-Za-z]{2})?-|^(?:LL-)?Q\d/;
+const SEARCH_STOPWORDS = new Set(['the','a','an','of','and','ft','feat','with','song','music','track']);
+
+function queryTerms(query) {
+  return clip(query,100).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 2 && !SEARCH_STOPWORDS.has(t));
+}
+
+export function mapCommons(page, query='') {
   const info = page?.imageinfo?.[0];
   if (!info?.url || !AUDIO_TYPES.test(new URL(safeHttp(info.url) || 'https://invalid.example/').pathname)) return null;
   const license = clip(info.extmetadata?.LicenseShortName?.value,70);
   if (!license) return null;
   const rawTitle = clip(page.title,140).replace(/^File:/i,'').replace(/\.(mp3|ogg|oga|wav|flac|m4a|aac|opus|webm)$/i,'').replace(/_/g,' ');
+  if (SPOKEN_WORD.test(rawTitle)) return null;
+  const terms = queryTerms(query);
+  if (terms.length && !terms.some(term => rawTitle.toLowerCase().includes(term))) return null;
   return track({provider:'commons',id:String(page.pageid),title:rawTitle,
     artist:'Wikimedia Commons contributor',source:info.url,
     page:info.descriptionurl || ('https://commons.wikimedia.org/wiki/' + encodeURIComponent(page.title)),
@@ -116,6 +131,39 @@ export function mapRadio(raw) {
     source,page:safeHttp(raw.homepage) || 'https://www.radio-browser.info/',license:'Live station · station terms apply',live:true});
 }
 
+// Anonymous callers get throttled hard when four sources fire at once, so retry
+// the two codes that actually mean "back off". Other 5xx surface immediately.
+const THROTTLED = /HTTP (429|503)\b/;
+const MAX_ATTEMPTS = 3;
+// Measured on a cold index, Openverse answers in 9-10s (and once in 46s) while the
+// other three sources are under 2s. This covers retries plus the radio mirror
+// failover as one unit, so a dead source reports itself instead of hanging Browse.
+const REQUEST_TIMEOUT_MS = 15000;
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function isThrottle(err) {
+  return THROTTLED.test(String(err?.message ?? '')) || err?.name === 'TypeError';
+}
+
+// One deadline covers a provider's whole attempt sequence. Without it a hung or
+// rate-limited source retried indefinitely and the search screen never resolved.
+function deadline(signal) {
+  const timer = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  if (!signal) return timer;
+  return AbortSignal.any ? AbortSignal.any([signal, timer]) : signal;
+}
+
+async function withRetry(run, signal) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      if (signal?.aborted || attempt >= MAX_ATTEMPTS - 1 || !isThrottle(err)) throw err;
+      await wait(300 * 2 ** attempt);
+    }
+  }
+}
+
 async function getJSON(url,fetchImpl,signal) {
   const res = await fetchImpl(url, {signal,headers:{Accept:'application/json'}});
   if (!res.ok) throw new Error('HTTP '+res.status);
@@ -124,27 +172,38 @@ async function getJSON(url,fetchImpl,signal) {
 
 export async function fetchProvider(provider, options={}, fetchImpl=fetch) {
   const {mode='search',query='',offset=0,limit=SOURCE_LIMIT,signal}=options;
-  if (provider==='audius') return fetchFreeTracks({mode,query,offset,limit,signal},fetchImpl)
-    .then(items=>items.map(t=>({...t,provider:'audius',page:'https://audius.co',license:'Artist-provided stream',live:false})));
+  // One budget per provider, so retries and the radio mirror failover cannot stack
+  // into a minute of dead time while the search screen waits on a hung source.
+  const budget = deadline(signal);
+  const get = url => withRetry(()=>getJSON(url,fetchImpl,budget), budget);
+  if (provider==='audius') {
+    const items = await withRetry(()=>fetchFreeTracks({mode,query,offset,limit,signal:budget},fetchImpl), budget);
+    return items.map(t=>({...t,provider:'audius',page:'https://audius.co',license:'Artist-provided stream',live:false}));
+  }
   if (provider==='openverse') {
-    const data = await getJSON(openverseUrl({mode,query,offset,limit}),fetchImpl,signal);
+    const data = await get(openverseUrl({mode,query,offset,limit}));
     if (!Array.isArray(data?.results)) throw new Error('Unexpected Openverse response');
     return data.results.map(mapOpenverse).filter(Boolean);
   }
   if (provider==='commons') {
-    const data = await getJSON(commonsUrl({mode,query,offset,limit}),fetchImpl,signal);
-    if (!data?.query && !data?.batchcomplete) throw new Error('Unexpected Wikimedia response');
-    return Object.values(data.query?.pages || {}).map(mapCommons).filter(Boolean);
+    const data = await get(commonsUrl({mode,query,offset,limit}));
+    // "batchcomplete" is an empty string on a search with zero hits, so a truthiness
+    // test reported every legitimate empty result as a broken source.
+    if (!data || typeof data !== 'object' || !('batchcomplete' in data || 'query' in data || 'error' in data)) {
+      throw new Error('Unexpected Wikimedia response');
+    }
+    if (data.error) throw new Error('Wikimedia: '+clip(data.error.info,60));
+    return Object.values(data.query?.pages || {}).map(page=>mapCommons(page,query)).filter(Boolean);
   }
   if (provider==='radio') {
     let error;
     for(const server of RADIO_SERVERS) {
       try {
-        const data = await getJSON(radioUrl({mode,query,offset,limit},server),fetchImpl,signal);
+        const data = await get(radioUrl({mode,query,offset,limit},server));
         if (!Array.isArray(data)) throw new Error('Unexpected Radio Browser response');
         return data.map(mapRadio).filter(Boolean);
       } catch(err) {
-        if (signal?.aborted) throw err;
+        if (budget.aborted) throw err;
         error=err;
       }
     }
