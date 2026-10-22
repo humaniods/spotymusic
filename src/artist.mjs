@@ -152,7 +152,7 @@ async function loadCommunity() {
     const offline = /Failed to fetch|Load failed|not JSON|No answer from the OpenMic server|NetworkError/.test(message);
     status.textContent = offline
       ? 'No OpenMic server is answering. Start it with npm start — browsing free sources still works without it.'
-      : 'Community catalog unavailable: ' + esc(message.slice(0, 160));
+      : 'Community catalog unavailable: ' + message.slice(0, 160);
   }
 }
 

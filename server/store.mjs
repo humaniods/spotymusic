@@ -28,8 +28,11 @@ export function createStore(file) {
     const snapshot = JSON.stringify(data, null, 2);
     const tmp = file + '.' + process.pid + '.tmp';
     queue = queue.then(async () => {
-      await mkdir(dirnameOf(file), { recursive: true });
-      await writeFile(tmp, snapshot);
+      // This file holds emails, password hashes and session digests, so it must not be
+      // readable by every account on a shared machine. rename() carries the mode across,
+      // which also tightens a db.json that an older version left world-readable.
+      await mkdir(dirnameOf(file), { recursive: true, mode: 0o700 });
+      await writeFile(tmp, snapshot, { mode: 0o600 });
       await rename(tmp, file);
     }, () => {});
     return queue;
