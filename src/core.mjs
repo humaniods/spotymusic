@@ -31,7 +31,8 @@ export function parseSpotifyUrl(input) {
 export function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const total = Math.floor(seconds);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2,'0')}`;
+  const minutes = Math.floor(total / 60), secs = String(total % 60).padStart(2, '0');
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${secs}` : `${minutes}:${secs}`;
 }
 
 export function nextIndex(current, size, { repeat = 'off', shuffle = false, random = Math.random } = {}) {

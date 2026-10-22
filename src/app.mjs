@@ -49,7 +49,10 @@ function sanitizeLinks(links){return Array.isArray(links)?links.filter(entry=>pa
 function isValidPlaylist(value){return value&&typeof value.name==='string'&&Array.isArray(value.ids)&&typeof value.id==='string';}
 function allItems(){return [...state.tracks,...state.links];}
 // Browsed listings are not "saved", so they stay out of allItems() and the Library
-// count, but must still resolve for likes, playlists and the queue.
+// count, but anything the user liked or put in a playlist must still resolve and
+// remain searchable - that is what makes a free-source track "theirs".
+function ownedOnline(){return state.online.filter(t=>isLiked(t.id)||state.playlists.some(p=>p.ids.includes(t.id)));}
+function searchableItems(){return [...allItems(),...ownedOnline()];}
 function getItem(id){return allItems().find(t=>t.id===id)||state.online.find(t=>t.id===id);}
 function isLiked(id){return state.liked.has(id);}
 function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#toggle-play)');controls.forEach(btn=>btn.disabled=state.current?.kind==='spotify');$('#toggle-play').disabled=state.current?.kind==='spotify';$('#seek').disabled=state.current?.kind==='spotify' || state.current?.live===true;$('#volume').disabled=state.current?.kind==='spotify';}
@@ -73,7 +76,7 @@ function renderPage(){
     renderFeatured(); renderRows('#recent-list',allItems().slice().reverse().slice(0,6),'Your library is ready','Import audio or save a Spotify link to get started.');
   } else if(state.page==='search'){
     $('#search-panel').classList.remove('hidden');
-    const items=searchItems(allItems(),state.query);$('#search-count').textContent=`${items.length} result${items.length===1?'':'s'}`;renderRows('#search-results',items,'Nothing matched your search');
+    const items=searchItems(searchableItems(),state.query);$('#search-count').textContent=`${items.length} result${items.length===1?'':'s'}`;renderRows('#search-results',items,'Nothing matched your search');
   } else if(state.page==='free'){
     $('#free-panel').classList.remove('hidden');
   } else if(state.page==='library'){
