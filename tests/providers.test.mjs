@@ -129,6 +129,37 @@ test('Commons rejects Wikipedia pronunciation and spoken-article recordings',()=
   assert.ok(mapCommons(commonsRecord,''));
 });
 
+test('sources report independently as they settle, not as a batch',async()=>{
+  const order=[];
+  const mocked=async url=>{
+    if(url.includes('api.audius.co')) {await new Promise(r=>setTimeout(r,60));
+      return {ok:true,json:async()=>({data:[{id:'abcd1234efgh',title:'Slow but first',user:{name:'A'}}]})};}
+    if(url.includes('api.openverse.org')) return {ok:true,json:async()=>({results:[openRecord]})};
+    if(url.includes('commons.wikimedia.org')) return {ok:false,status:500,json:async()=>({})};
+    return {ok:true,json:async()=>[station]};
+  };
+  const data=await searchAcross({provider:'all',mode:'search',query:'jazz',
+    onSource:({provider,tracks,error})=>order.push(provider+(error?'!':'+'+tracks.length))},mocked);
+  assert.equal(order.length,4);
+  assert.equal(new Set(order.map(x=>x.split(/[!+]/)[0])).size,4,'each source reports once');
+  assert.ok(order.includes('commons!'),order.join(','));
+  assert.ok(order[3].startsWith('audius'),order.join(','));
+  // the aggregate stays in declared source order regardless of who answered first
+  assert.deepEqual(data.tracks.map(t=>t.provider),['audius','openverse','radio']);
+  assert.deepEqual(data.errors.map(e=>e.provider),['commons']);
+});
+
+test('internal addresses cannot become an audio source',()=>{
+  for(const host of ['[::1]','[::ffff:7f00:1]','[fd00::1]','[fe80::1%25eth0]','localhost.','db.internal',
+                     'x.corp','127.0.0.1','10.1.2.3','192.168.4.4','172.16.9.9','169.254.169.254',
+                     '2130706433','0x7f000001','127.1','0.0.0.0']){
+    assert.equal(mapOpenverse({...openRecord,url:'https://'+host+'/a.mp3'}),null,host);
+  }
+  for(const host of ['[2606:4700:0::1]','cdn.example.org','172.15.0.1','8.8.8.8']){
+    assert.ok(mapOpenverse({...openRecord,url:'https://'+host+'/a.mp3'}),host);
+  }
+});
+
 test('throttled providers are retried before giving up',async()=>{
   let calls=0;
   const flaky=async()=>{

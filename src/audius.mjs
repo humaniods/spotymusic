@@ -6,7 +6,7 @@ export const PAGE_SIZE = 18;
 
 export function streamUrl(providerId) {
   if (!ID.test(String(providerId))) throw new Error('Invalid Audius track ID');
-  return AUDIUS_API + '/tracks/' + encodeURIComponent(providerId) + '/stream?app_name=SpotyMusic';
+  return AUDIUS_API + '/tracks/' + encodeURIComponent(providerId) + '/stream?app_name=OpenMic';
 }
 
 export function catalogUrl(options = {}) {
@@ -15,7 +15,7 @@ export function catalogUrl(options = {}) {
   const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
   const path = mode === 'search' ? '/tracks/search' : mode === 'trending' ? '/tracks/trending' : '/tracks/latest';
   const url = new URL(AUDIUS_API + path);
-  url.searchParams.set('app_name', 'SpotyMusic');
+  url.searchParams.set('app_name', 'OpenMic');
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('offset', String(offset));
   if (mode === 'trending') url.searchParams.set('time', 'week');

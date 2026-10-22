@@ -11,7 +11,7 @@ test('Latest and trending endpoints use only official Audius HTTPS API', () => {
   const latest = new URL(catalogUrl());
   assert.equal(latest.origin, 'https://api.audius.co');
   assert.equal(latest.pathname, '/v1/tracks/latest');
-  assert.equal(latest.searchParams.get('app_name'), 'SpotyMusic');
+  assert.equal(latest.searchParams.get('app_name'), 'OpenMic');
   const trending = new URL(catalogUrl({ mode:'trending', offset:18 }));
   assert.equal(trending.pathname, '/v1/tracks/trending');
   assert.equal(trending.searchParams.get('time'), 'week');
@@ -28,7 +28,7 @@ test('Search query URL-encodes Unicode names and clamps page size', () => {
 });
 
 test('Stream URL is an official Audius track endpoint', () => {
-  assert.equal(streamUrl('aB_c-23'), 'https://api.audius.co/v1/tracks/aB_c-23/stream?app_name=SpotyMusic');
+  assert.equal(streamUrl('aB_c-23'), 'https://api.audius.co/v1/tracks/aB_c-23/stream?app_name=OpenMic');
   assert.throws(() => streamUrl('../evil'));
   assert.throws(() => streamUrl(''));
 });

@@ -11,14 +11,27 @@ const PROVIDER_NAMES = Object.keys(SOURCES);
 const ID = /^[\w-]{2,120}$/;
 
 function clip(value, n = 140) { return String(value || '').trim().slice(0,n); }
+// Provider records point this browser at someone else's server, so a source that
+// lists an internal address would make the user's own machine probe its LAN.
+function isInternalHost(hostname) {
+  const host = hostname.toLowerCase().replace(/\.$/, '');            // "localhost." is still localhost
+  if (/^(localhost|.+\.localhost|.+\.local|.+\.internal|.+\.corp|.+\.home|.+\.lan)$/.test(host)) return true;
+  if (/^(127\.|10\.|192\.168\.|0\.|169\.254\.)/.test(host)) return true;
+  const match = /^172\.(\d+)\./.exec(host);
+  if (match && +match[1] >= 16 && +match[1] <= 31) return true;
+  if (host.startsWith('[')) {                                        // WHATWG keeps IPv6 wrapped in brackets
+    const withZone = host.slice(1, -1).toLowerCase();
+    const v6 = withZone.includes('%') ? withZone.slice(0, withZone.indexOf('%')) : withZone;
+    // "::" covers loopback ::1, unspecified ::, v4-mapped ::ffff:x and v4-compatible ::1.2.3.4.
+    if (/^(::|f[cd]|fe80)/.test(v6)) return true;
+  }
+  return false;
+}
 function safeHttp(raw, allowedHttp = false) {
   try {
     const url = new URL(String(raw));
     if (url.protocol !== 'https:' && !(allowedHttp && url.protocol === 'http:')) return null;
-    if (/^(localhost|.+\.localhost|.+\.local)$/i.test(url.hostname)) return null;
-    if (/^(127\.|10\.|192\.168\.|0\.|169\.254\.)/.test(url.hostname)) return null;
-    const match = /^172\.(\d+)\./.exec(url.hostname);
-    if (match && +match[1] >= 16 && +match[1] <= 31) return null;
+    if (isInternalHost(url.hostname)) return null;
     if (url.username || url.password) return null;
     return url.href;
   } catch { return null; }
@@ -212,17 +225,25 @@ export async function fetchProvider(provider, options={}, fetchImpl=fetch) {
   throw new Error('Unsupported provider');
 }
 
-export async function searchAcross({provider='all',mode='search',query='',offset=0,limit=SOURCE_LIMIT,signal}={}, fetchImpl=fetch) {
+export async function searchAcross({provider='all',mode='search',query='',offset=0,limit=SOURCE_LIMIT,signal,onSource}={}, fetchImpl=fetch) {
   const selected = provider==='all' ? PROVIDER_NAMES : [provider];
   if (!selected.every(x=>PROVIDER_NAMES.includes(x))) throw new Error('Unknown source');
-  const outcomes=await Promise.allSettled(selected.map(key=>fetchProvider(key,{mode,query,offset,limit,signal},fetchImpl)));
+  // Each source reports back on its own so the screen can paint what has already
+  // arrived: Audius answers in about 1.5s while a cold Openverse index takes 10s+.
+  const settled=await Promise.all(selected.map(key=>fetchProvider(key,{mode,query,offset,limit,signal},fetchImpl)
+    .then(tracks=>({provider:key,tracks,error:null}))
+    .catch(err=>{
+      if (signal?.aborted) throw err;
+      return {provider:key,tracks:[],error:String(err?.message||err)};
+    })
+    .then(outcome=>{ onSource?.(outcome); return outcome; })));
   if(signal?.aborted) throw new DOMException('Aborted','AbortError');
   const errors=[];
   const tracks=[];
   const seen=new Set();
-  outcomes.forEach((outcome,index)=>{
-    if (outcome.status==='rejected') {errors.push({provider:selected[index],message:String(outcome.reason?.message||outcome.reason)});return;}
-    for(const item of outcome.value) if(!seen.has(item.id)){seen.add(item.id);tracks.push(item);}
+  settled.forEach(({provider:key,tracks:items,error})=>{
+    if (error) {errors.push({provider:key,message:error});return;}
+    for(const item of items) if(!seen.has(item.id)){seen.add(item.id);tracks.push(item);}
   });
   return {tracks,errors,sources:selected.length};
 }

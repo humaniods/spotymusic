@@ -1,6 +1,6 @@
-# SpotyMusic — open-source, no-subscription music player
+# OpenMic — open-source, no-subscription music player
 
-A responsive, local-first **MIT-licensed** music player that searches multiple free-to-access music catalogs, streams provider-authorized recordings, and plays internet radio and your own music files. No account, checkout, payment gateway or premium tier in SpotyMusic.
+A responsive, local-first **MIT-licensed** music player that searches multiple free-to-access music catalogs, streams provider-authorized recordings, and plays internet radio and your own music files. No account, checkout, payment gateway or premium tier in OpenMic.
 
 **Not a Spotify catalog unlock.** Third-party catalogs do not guarantee every new Bollywood, Punjabi, Hindi or international commercial song. Each track/station remains subject to its original provider's copyright, licensing, terms, browser format support and availability.
 
@@ -20,8 +20,8 @@ Each result shows the provider and source/credit link. **The app's MIT license c
 Clone the repository:
 
 \`\`\`bash
-git clone https://github.com/humaniods/spotymusic.git
-cd spotymusic
+git clone https://github.com/humaniods/openmic.git
+cd openmic
 python3 -m http.server 5173
 # Open http://localhost:5173
 \`\`\`
