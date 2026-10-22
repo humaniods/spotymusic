@@ -2,6 +2,8 @@ import { parseSpotifyUrl, formatTime, nextIndex, searchItems, escapeHtml, safeFi
 import { makeDemo } from './demo-audio.mjs';
 import { reviveFreeTrack } from './audius.mjs';
 import { reviveMultiTrack, SOURCES } from './providers.mjs';
+import { reviveCommunity } from './community-api.mjs';
+import { askConfirm } from './dialogs.mjs';
 
 // Demo audio is synthesized on first play, not at import: three 20-second WAVs cost
 // about 160ms of main-thread work and 1.3MB of blobs on every page load otherwise.
@@ -39,7 +41,7 @@ function persist() {
     localStorage.setItem('openmic:v1:liked',JSON.stringify([...state.liked]));
     localStorage.setItem('openmic:v1:playlists',JSON.stringify(state.playlists));
     const retained = state.online.filter(item => state.liked.has(item.id) || state.playlists.some(list => list.ids.includes(item.id))).slice(-300);
-    localStorage.setItem('openmic:v1:online',JSON.stringify(retained.map(({id,title,artist,source,page,license,kind,provider,art}) => ({id,title,artist,source,page,license,kind,provider,art}))));
+    localStorage.setItem('openmic:v1:online',JSON.stringify(retained.map(({id,title,artist,source,page,license,kind,provider,art,handle}) => ({id,title,artist,source,page,license,kind,provider,art,handle}))));
   } catch { toast('Storage unavailable; changes may not persist'); }
 }
 function openDB() {
@@ -68,21 +70,36 @@ function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#to
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),2900);}
 function artStyle(item){return ART[Number.isInteger(item?.art)?item.art%ART.length:3];}
 function glyph(item){return item?.kind==='spotify'?'◉':item?.kind==='demo'?'♫':'♪';}
+function kindLabel(item){
+  if(item.kind==='spotify')return `SPOTIFY ${escapeHtml(item.spotifyKind).toUpperCase()}`;
+  if(item.kind==='demo')return 'ORIGINAL DEMO';
+  if(item.kind==='audius')return 'AUDIUS FREE STREAM';
+  if(item.kind==='radio')return 'LIVE RADIO';
+  if(item.kind==='community')return 'ARTIST UPLOAD';
+  return SOURCES[item.kind]||'LOCAL AUDIO';
+}
+function playbackLabel(item){
+  if(item?.kind==='spotify')return 'SPOTIFY EMBED';
+  if(item?.kind==='audius')return 'AUDIUS · FREE STREAM';
+  if(item?.kind==='radio')return 'LIVE RADIO';
+  if(item?.kind==='community')return 'ARTIST UPLOAD · OPENMIC SERVER';
+  return SOURCES[item?.kind]||'LOCAL PLAYER';
+}
 function icon(name){return `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;}
 function likedClass(item){return isLiked(item.id)?' liked':'';}
 function removableKind(kind){return kind==='local'||kind==='spotify';}
 // Rows keep a fixed slot so the library grid does not shift between removable and
 // read-only listings.
 function rowRemove(item){return removableKind(item.kind)?`<button class="row-remove" data-action="remove" data-id="${escapeHtml(item.id)}" title="Remove from library" aria-label="Remove ${escapeHtml(item.title)} from library">${icon('trash')}</button>`:'<span class="row-slot" aria-hidden="true"></span>';}
-function itemRow(item,index){const active=item.id===state.current?.id;return `<div class="track-item${active?' selected':''}" data-id="${escapeHtml(item.id)}"><button class="row-play" data-action="play" data-id="${escapeHtml(item.id)}" aria-label="Play ${escapeHtml(item.title)}">${icon('play')}</button><div class="track-cover" style="background:${artStyle(item)}"><span>${glyph(item)}</span></div><div style="min-width:0"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><div class="track-kind">${item.kind==='spotify'?`SPOTIFY ${escapeHtml(item.spotifyKind).toUpperCase()}`:item.kind==='demo'?'ORIGINAL DEMO':item.kind==='audius'?'AUDIUS FREE STREAM':item.kind==='radio'?'LIVE RADIO':SOURCES[item.kind]||'LOCAL AUDIO'}</div><button class="icon-button row-like${likedClass(item)}" data-action="like" data-id="${escapeHtml(item.id)}" title="Like" aria-label="Like ${escapeHtml(item.title)}">${icon('heart')}</button><button class="icon-button row-add" data-action="add" data-id="${escapeHtml(item.id)}" title="Add to playlist" aria-label="Add ${escapeHtml(item.title)} to playlist">${icon('plus')}</button>${rowRemove(item)}</div>`;}
+function itemRow(item,index){const active=item.id===state.current?.id;return `<div class="track-item${active?' selected':''}" data-id="${escapeHtml(item.id)}"><button class="row-play" data-action="play" data-id="${escapeHtml(item.id)}" aria-label="Play ${escapeHtml(item.title)}">${icon('play')}</button><div class="track-cover" style="background:${artStyle(item)}"><span>${glyph(item)}</span></div><div style="min-width:0"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><div class="track-kind">${kindLabel(item)}</div><button class="icon-button row-like${likedClass(item)}" data-action="like" data-id="${escapeHtml(item.id)}" title="Like" aria-label="Like ${escapeHtml(item.title)}">${icon('heart')}</button><button class="icon-button row-add" data-action="add" data-id="${escapeHtml(item.id)}" title="Add to playlist" aria-label="Add ${escapeHtml(item.title)} to playlist">${icon('plus')}</button>${rowRemove(item)}</div>`;}
 function empty(text,sub='Use the buttons above to add something.'){return `<div class="empty-state"><b>${escapeHtml(text)}</b>${escapeHtml(sub)}</div>`;}
 function renderRows(selector,items,emptyMsg='No items yet'){const container=$(selector);container.innerHTML=items.length?items.map(itemRow).join(''):empty(emptyMsg);}
 function renderFeatured(){ $('#featured-grid').innerHTML=DEMOS.map(item=>`<article class="album-card" data-action="play" data-id="${item.id}" tabindex="0" role="button" aria-label="Play ${item.title}"><div class="album-art" style="background:${artStyle(item)}"><div class="album-symbol">${glyph(item)}</div></div><div class="album-meta"><div><b>${item.title}</b><span>${item.artist}</span></div><button class="album-play" data-action="play" data-id="${item.id}" aria-label="Play ${item.title}">${icon('play')}</button></div></article>`).join('');}
 function renderSidebar(){const nav=$('#playlist-nav');nav.innerHTML=state.playlists.length?state.playlists.map(p=>`<button class="playlist-link${state.page==='playlist'&&state.activePlaylist===p.id?' active':''}" data-action="playlist" data-id="${escapeHtml(p.id)}">${icon('music')}<span>${escapeHtml(p.name)}</span></button>`).join(''):'<div class="muted-side">Create a playlist to organize your music.</div>'; $$('.nav-item').forEach(btn=>btn.classList.toggle('active',btn.dataset.page===state.page));}
 function renderPage(){
   renderSidebar();
-  ['home-panel','search-panel','library-panel','collection-panel','free-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
-  const breadcrumb={home:'Your listening space',search:'Find your music',free:'Free music',library:'Your collection',liked:'Your favourites',playlist:'Your playlist'};
+  ['home-panel','search-panel','library-panel','collection-panel','free-panel','community-panel','artist-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
+  const breadcrumb={home:'Your listening space',search:'Find your music',free:'Free music',community:'Community releases',artist:'For artists',library:'Your collection',liked:'Your favourites',playlist:'Your playlist'};
   $('#breadcrumb').textContent=breadcrumb[state.page]||breadcrumb.home;
   if(state.page==='home'){
     $('#home-panel').classList.remove('hidden');
@@ -92,6 +109,11 @@ function renderPage(){
     const items=searchItems(searchableItems(),state.query);$('#search-count').textContent=`${items.length} result${items.length===1?'':'s'}`;renderRows('#search-results',items,'Nothing matched your search');
   } else if(state.page==='free'){
     $('#free-panel').classList.remove('hidden');
+  } else if(state.page==='community'){
+    // artist.mjs owns this screen's content; the panel only needs to be on screen.
+    $('#community-panel').classList.remove('hidden');
+  } else if(state.page==='artist'){
+    $('#artist-panel').classList.remove('hidden');
   } else if(state.page==='library'){
     $('#library-panel').classList.remove('hidden');
     const items=allItems();$('#library-count').textContent=`${items.length} saved items`;renderRows('#library-list',items,'No tracks saved');
@@ -107,12 +129,12 @@ function renderPage(){
     renderRows('#collection-list',items,'This collection is empty','Tap ♥ or + on a song to save it here.');
   }
 }
-function navigate(page, playlistId){state.page=page;if(playlistId)state.activePlaylist=playlistId;renderPage();$('#main-scroll').scrollTop=0;if(page==='search')$('#search-input').focus();}
+function navigate(page, playlistId){state.page=page;if(playlistId)state.activePlaylist=playlistId;renderPage();$('#main-scroll').scrollTop=0;if(page==='search')$('#search-input').focus();window.dispatchEvent(new CustomEvent('openmic:navigate',{detail:{page}}));}
 function updatePlayIcon(){const playing=!audio.paused&&state.current?.kind!=='spotify';$('#toggle-play').innerHTML=icon(playing?'pause':'play');$('#toggle-play').setAttribute('aria-label',playing?'Pause':'Play');}
 function updateFooter(){
  const item=state.current;$('#player-title').textContent=item?.title||'Nothing playing yet';$('#player-artist').textContent=item?.artist||'Choose a track';$('#player-cover').textContent=item?glyph(item):'♫';$('#player-cover').style.background=item?artStyle(item):ART[3];
  $('#player-like').disabled=!item;$('#player-like').classList.toggle('liked',!!item&&isLiked(item.id));
- $('#playback-mode').textContent=item?.kind==='spotify'?'SPOTIFY EMBED':item?.kind==='audius'?'AUDIUS · FREE STREAM':item?.kind==='radio'?'LIVE RADIO':SOURCES[item?.kind]||'LOCAL PLAYER';
+ $('#playback-mode').textContent=playbackLabel(item);
  $('#right-title').textContent=item?.title||'Your soundtrack starts here';$('#right-artist').textContent=item?.artist||'Pick something to play';
  $('#right-cover').style.background=item?artStyle(item):ART[3];
  $('#right-cover').querySelector('.right-cover-glyph').textContent=item?glyph(item):'♫';
@@ -123,22 +145,7 @@ function updateFooter(){
 function clearSpotifyFrame(){const frame=$('#spotify-frame');frame.removeAttribute('src');frame.removeAttribute('data-big');$('#embed-container').classList.add('hidden');$('.rightbar').classList.remove('embed-active');$('#local-info').classList.remove('hidden');}
 function enableSpotifyFrame(item){const parsed=parseSpotifyUrl(item.url);if(!parsed)return toast('Invalid Spotify link');const frame=$('#spotify-frame');frame.src=parsed.embedUrl;frame.dataset.big=parsed.kind==='track'?'false':'true';$('#spotify-open').href=parsed.url;$('#embed-container').classList.remove('hidden');$('.rightbar').classList.add('embed-active');$('#local-info').classList.add('hidden');}
 function releaseAudio(){audio.pause();audio.removeAttribute('src');audio.load();}
-let confirmSettle=null, playlistTarget=null;
-function askConfirm(title,message,okLabel){
-  return new Promise(resolve=>{
-    confirmSettle=resolve;
-    $('#confirm-title').textContent=title;
-    $('#confirm-message').textContent=message;
-    $('#confirm-ok').textContent=okLabel;
-    $('#confirm-dialog').showModal();
-    $('#confirm-cancel').focus();
-  });
-}
-function settleConfirm(answer){
-  const settle=confirmSettle; confirmSettle=null;
-  $('#confirm-dialog').close();
-  if(settle) settle(answer);
-}
+let playlistTarget=null;
 function renderPlaylistOptions(){
   const box=$('#playlist-options');
   box.innerHTML=state.playlists.length
@@ -217,12 +224,29 @@ function saveSpotifyLink(event){event.preventDefault();const parsed=parseSpotify
 function fileFingerprint(file){return [file.name,file.size,file.lastModified||0].join(':');}
 async function importFiles(files){const valid=[...files].filter(safeFile);if(!valid.length){toast('No supported audio files (max 200 MB per file)');return;}let added=0,dupes=0;for(const file of valid){const fp=fileFingerprint(file);if(fingerprints.has(fp)){dupes++;continue;}const id=`local:${crypto.randomUUID()}`;const item={id,title:file.name.replace(/\.[^.]+$/,'').replace(/[_-]/g,' ').trim()||file.name,artist:'Your local files',kind:'local',art:3,fp};fingerprints.add(fp);const url=URL.createObjectURL(file);state.objectUrls.set(id,url);state.tracks.push(item);try{await dbPut({id,item,file});}catch{ /* Playback still works for this session. */ }added++;}navigate('library');toast(added?`${added} audio file${added===1?'':'s'} added${dupes?` · ${dupes} already in your library`:''}`:(dupes?`Already in your library (${dupes} duplicate${dupes===1?'':'s'})`:'Nothing added'));$('#file-input').value='';}
 function events(){
+  // artist.mjs owns the studio and community screens; these two events let it speak to
+  // the player without importing this module's internals.
+  window.addEventListener('openmic:toast', event => toast(String(event.detail || '')));
+  window.addEventListener('openmic:goto', event => { if (typeof event.detail === 'string') navigate(event.detail); });
+  // A takedown removes the recording from the server, so the listener's saved copy has
+  // to go too - otherwise Liked Songs keeps a row that 404s forever.
+  window.addEventListener('openmic:forget', event => {
+    const id = String(event.detail || '');
+    if (!id) return;
+    state.liked.delete(id);
+    for (const playlist of state.playlists) playlist.ids = playlist.ids.filter(x => x !== id);
+    state.online = state.online.filter(t => t.id !== id);
+    state.queue = state.queue.filter(x => x !== id);
+    if (state.current?.id === id) { state.current = null; releaseAudio(); clearSpotifyFrame(); }
+    persist(); renderPage(); updateFooter();
+  });
   window.addEventListener('openmic:register-online', event => {
     if (!Array.isArray(event.detail)) return;
     const tracks = new Map(state.online.map(item => [item.id,item]));
     for (const item of event.detail.slice(0, 150)) {
       let safe=null;
       if(item?.kind==='audius' && /^audius:[A-Za-z0-9_-]{2,80}$/.test(item.id)) safe=reviveFreeTrack(item);
+      else if(item?.kind==='community') safe=reviveCommunity(item);
       else safe=reviveMultiTrack(item);
       if(safe) tracks.set(safe.id,{...safe,art:item.art});
     }
@@ -242,9 +266,6 @@ function events(){
   $('#close-dialog').addEventListener('click',()=>$('#spotify-dialog').close());
   $('#cancel-dialog').addEventListener('click',()=>$('#spotify-dialog').close());
   $('#create-playlist').addEventListener('click',createPlaylist);
-  $('#confirm-ok').addEventListener('click',()=>settleConfirm(true));
-  $('#confirm-cancel').addEventListener('click',()=>settleConfirm(false));
-  $('#confirm-dialog').addEventListener('cancel',event=>{event.preventDefault();settleConfirm(false);});
   $('#playlist-close').addEventListener('click',()=>$('#playlist-dialog').close());
   $('#playlist-cancel').addEventListener('click',()=>$('#playlist-dialog').close());
   $('#playlist-save').addEventListener('click',savePlaylistChoice);
@@ -264,7 +285,11 @@ function events(){
 }
 async function init(){
   state.links=sanitizeLinks(readJSON('links',[]));
-  state.online=(Array.isArray(readJSON('online',[])) ? readJSON('online',[]) : []).map(x=>reviveFreeTrack(x)||reviveMultiTrack(x)).filter(Boolean).slice(-300);
+  // Each source has its own reviver because each one re-checks its own id shape and
+  // rebuilds the stream URL instead of trusting the stored copy. A saved record whose
+  // kind no longer matches is dropped rather than played from an unchecked URL.
+  const reviveSaved = saved => reviveFreeTrack(saved) || reviveMultiTrack(saved) || reviveCommunity(saved);
+  state.online=(Array.isArray(readJSON('online',[])) ? readJSON('online',[]) : []).map(reviveSaved).filter(Boolean).slice(-300);
   state.liked=new Set(readJSON('liked',[]).filter(id=>typeof id==='string'));
   state.playlists=readJSON('playlists',[]).filter(isValidPlaylist).slice(0,100).map(p=>({id:p.id,name:p.name.slice(0,60),ids:p.ids.filter(id=>typeof id==='string')}));
   try{db=await openDB();const rows=await dbAll();for(const record of rows){if(!record?.file||!record?.item?.id)continue;if(record.item.fp)fingerprints.add(record.item.fp);state.tracks.push(record.item);state.objectUrls.set(record.item.id,URL.createObjectURL(record.file));}}catch(error){console.warn('Browser database unavailable',error);}

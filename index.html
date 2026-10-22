@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#090b0d">
-  <meta name="description" content="OpenMic: stream openly available tracks from Audius, Openverse, Wikimedia Commons and online radio.">
+  <meta name="description" content="OpenMic: stream openly available tracks from Audius, Openverse, Wikimedia Commons and online radio, and hear uploads from independent artists.">
   <title>OpenMic — Free & open music discovery</title>
   <link rel="stylesheet" href="./src/styles.css">
   <link rel="stylesheet" href="./src/free-music.css">
+  <link rel="stylesheet" href="./src/artist.css">
 </head>
 <body>
   <svg aria-hidden="true" class="svg-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -28,6 +29,9 @@
     <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 2 0 1 1-6 0 3 2 0 0 1 6 0Zm12-2a3 2 0 1 1-6 0 3 2 0 0 1 6 0Z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5 19 19M19 5 5 19"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5M16 5.6a3.2 3.2 0 0 1 0 5.5M18 20c0-2.4-.8-3.8-2.2-4.6"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22M8.5 22h7"/></symbol>
   </svg>
   <div id="app">
     <aside class="sidebar">
@@ -36,6 +40,8 @@
         <button class="nav-item active" data-page="home"><svg><use href="#i-home"/></svg> Home</button>
         <button class="nav-item" data-page="search"><svg><use href="#i-search"/></svg> Search</button>
         <button class="nav-item" data-page="free"><svg><use href="#i-music"/></svg> Free Music <span class="free-nav-tag">NEW</span></button>
+        <button class="nav-item" data-page="community"><svg><use href="#i-users"/></svg> Community <span class="free-nav-tag">ARTISTS</span></button>
+        <button class="nav-item" data-page="artist"><svg><use href="#i-mic"/></svg> For artists</button>
         <button class="nav-item" data-page="library"><svg><use href="#i-library"/></svg> Your Library</button>
         <button class="nav-item" data-page="liked"><svg><use href="#i-heart"/></svg> Liked Songs</button>
       </div>
@@ -48,7 +54,7 @@
       <header class="topbar"><div class="crumb"><span class="orb"></span><span id="breadcrumb">Your listening space</span></div><div class="top-actions"><button class="secondary small" id="add-spotify"><svg><use href="#i-plus"/></svg> Spotify link</button><button class="primary small" id="upload-songs"><svg><use href="#i-upload"/></svg> Add music</button></div></header>
       <div class="scroll-area" id="main-scroll">
         <section id="home-panel" class="page-panel">
-          <div class="hero"><div class="hero-text"><span class="eyebrow"><span class="green-dot"></span> YOUR MUSIC SPACE</span><h1>All your music.<br><em>One beautiful place.</em></h1><p>Listen across four open/free catalogs, discover licensed recordings, tune in to live radio, and play local files. No subscription in OpenMic.</p><div class="hero-actions"><button class="primary" id="hero-upload"><svg><use href="#i-upload"/></svg> Add your music</button><button class="ghost" data-page="free">Browse free music <span>♫</span></button><button class="ghost" id="hero-spotify">Paste Spotify link <span>↗</span></button></div></div><div class="hero-art"><div class="record-glow"></div><div class="record"><div class="record-inner"><div class="record-label">SB<br>RADIO</div></div></div><div class="float-note note-one">♪</div><div class="float-note note-two">♫</div></div></div>
+          <div class="hero"><div class="hero-text"><span class="eyebrow"><span class="green-dot"></span> YOUR MUSIC SPACE</span><h1>All your music.<br><em>One beautiful place.</em></h1><p>Listen across four open/free catalogs, hear independent artists who publish straight to OpenMic, tune in to live radio, and play your own files. No subscription in OpenMic.</p><div class="hero-actions"><button class="primary" id="hero-upload"><svg><use href="#i-upload"/></svg> Add your music</button><button class="ghost" data-page="free">Browse free music <span>♫</span></button><button class="ghost" id="hero-spotify">Paste Spotify link <span>↗</span></button></div></div><div class="hero-art"><div class="record-glow"></div><div class="record"><div class="record-inner"><div class="record-label">OPEN<br>MIC</div></div></div><div class="float-note note-one">♪</div><div class="float-note note-two">♫</div></div></div>
           <div class="section-heading"><div><span class="eyebrow">START LISTENING</span><h2>Featured sessions</h2></div><span class="section-note">Original demo audio · ready to play</span></div>
           <div class="album-grid" id="featured-grid"></div>
           <div class="section-heading"><div><span class="eyebrow">CURATED BY YOU</span><h2>Recently added</h2></div><button class="text-link" data-page="library">View library →</button></div><div id="recent-list" class="track-list"></div>
@@ -71,6 +77,82 @@
           <div class="free-more-wrap"><button type="button" class="secondary small" id="free-more" hidden>Load more</button></div>
           <p class="free-disclaimer">No payments, accounts or premium unlocks inside OpenMic. Music is provided by <a href="https://audius.co" target="_blank" rel="noopener noreferrer">Audius</a>, <a href="https://openverse.org" target="_blank" rel="noopener noreferrer">Openverse</a>, <a href="https://commons.wikimedia.org" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> and <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">Radio Browser</a>. Click each song’s source/credit link for licensing and attribution. Online radio is a live broadcast, not song-on-demand. A free API does not guarantee every popular commercial release is available.</p>
         </section>
+        <section id="community-panel" class="page-panel hidden">
+          <div class="page-intro"><span class="eyebrow">ARTIST-UPLOADED MUSIC</span><h1>Community releases</h1>
+            <p>Recordings that artists published themselves on this OpenMic server, each with a rights warranty on file. <span id="community-count-note"></span></p></div>
+          <form id="community-form" class="free-search" role="search">
+            <label class="free-search-label" for="community-query">Search artist uploads</label>
+            <div class="free-search-row"><input id="community-query" type="search" autocomplete="off" placeholder="Title, artist, handle or genre…" maxlength="100" aria-label="Search artist uploads">
+              <button class="primary small" type="submit">Search</button><button class="ghost small" type="button" id="community-clear">Clear</button></div>
+          </form>
+          <div class="community-mood">
+            <label for="community-mood">Or describe the mood in plain words</label>
+            <div class="free-search-row"><input id="community-mood" autocomplete="off" placeholder="songs for a late night train ride" maxlength="120" aria-label="Describe what you want to hear">
+              <button class="ghost small" type="button" id="ai-search">Ask the assistant</button></div>
+          </div>
+          <div class="artist-head hidden" id="community-artist">
+            <div class="artist-head-top"><div><h2 id="artist-name">Artist</h2><span class="eyebrow" id="artist-handle">@artist</span></div><button class="ghost small" type="button" id="community-back">All uploads</button></div>
+            <p id="artist-bio"></p><span class="section-note" id="artist-count"></span>
+          </div>
+          <p class="section-note" id="community-status" role="status" aria-live="polite"></p>
+          <div class="track-list" id="community-results"></div>
+          <p class="free-disclaimer">Artists upload these recordings directly; OpenMic does not aggregate catalogs, rip streams, or host music it did not receive from the artist. Rights holders can report any track with the flag button, or <button class="text-link" type="button" id="takedown-open">file a notice here</button>. Notices go to the designated agent (<span id="dmca-agent">see README</span>); the recording is disabled on receipt, and uploaders who receive two notices are terminated.</p>
+        </section>
+        <section id="artist-panel" class="page-panel hidden">
+          <div class="page-intro"><span class="eyebrow">FOR ARTISTS</span><h1>Your music. Your page.</h1>
+            <p>Create an artist account, publish your own recordings, and get a page listeners can find you on. No cut, no ads, no label paperwork.</p></div>
+          <div id="studio-signedout" class="studio-forms">
+            <form id="signup-form" class="studio-card">
+              <h2>Create your artist account</h2>
+              <label for="signup-name">Display name</label><input id="signup-name" maxlength="60" autocomplete="name" placeholder="Ari Sharma">
+              <label for="signup-handle">Handle</label><input id="signup-handle" maxlength="30" autocomplete="off" placeholder="ari-sound"><span class="field-help">Listeners reach you as @handle — it is part of your URL.</span>
+              <label for="signup-email">Email</label><input id="signup-email" type="email" autocomplete="email" placeholder="you@example.com">
+              <label for="signup-password">Password</label><input id="signup-password" type="password" autocomplete="new-password" placeholder="at least 10 characters">
+              <p class="modal-error" id="signup-error" aria-live="polite"></p>
+              <button class="primary small" type="submit" id="signup-submit">Create artist page</button>
+            </form>
+            <form id="login-form" class="studio-card">
+              <h2>Already publishing?</h2>
+              <label for="login-email">Email</label><input id="login-email" type="email" autocomplete="email">
+              <label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password">
+              <p class="modal-error" id="login-error" aria-live="polite"></p>
+              <button class="secondary small" type="submit" id="login-submit">Sign in</button>
+              <p class="field-help">Passwords are scrypt-hashed on the server and the session cookie is HttpOnly, so nothing sensitive is kept in this browser.</p>
+            </form>
+          </div>
+          <div id="studio-account" class="hidden">
+            <form id="profile-form" class="studio-card">
+              <div class="studio-head"><div><span class="eyebrow">ARTIST PAGE</span><h2 id="profile-handle">@artist</h2></div><button class="ghost small" type="button" id="sign-out">Sign out</button></div>
+              <label for="profile-name">Display name</label><input id="profile-name" maxlength="60">
+              <label for="profile-bio">Bio</label><textarea id="profile-bio" rows="3" maxlength="500" placeholder="Where you record, what you make, what a first listen should be."></textarea>
+              <div class="studio-actions"><button class="primary small" type="submit">Save profile</button><span class="section-note" id="profile-status" role="status" aria-live="polite"></span></div>
+            </form>
+            <form id="upload-form" class="studio-card">
+              <h2>Publish a recording</h2>
+              <label for="upload-file">Audio file</label><input id="upload-file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.opus,.aac,.webm">
+              <label for="upload-title">Title</label><input id="upload-title" maxlength="120" placeholder="Monsoon Lofi">
+              <label for="upload-genre">Genre</label><input id="upload-genre" maxlength="40" placeholder="lofi">
+              <label for="upload-tags">Tags</label><input id="upload-tags" maxlength="120" placeholder="hindi, rain, focus"><span class="field-help">Comma separated, up to eight.</span>
+              <div class="rights-box"><label class="rights-label"><input type="checkbox" id="upload-rights"><span>I accept the OpenMic rights warranty:</span></label><p id="warranty-text" class="rights-text">Loading the warranty from the server…</p></div>
+              <div class="studio-actions"><button class="primary small" type="submit" id="upload-submit">Publish</button><span class="section-note" id="upload-status" role="status" aria-live="polite"></span></div>
+            </form>
+            <div class="studio-card">
+              <h2>Artist assistant</h2>
+              <div class="ai-row"><select id="ai-task" aria-label="Assistant task">
+                <option value="title">Suggest a title from the filename</option>
+                <option value="tags">Suggest tags for this track</option>
+                <option value="bio">Draft my artist bio</option>
+                <option value="rights">Check my rights situation</option>
+              </select><textarea id="ai-input" rows="2" maxlength="400" placeholder="Describe the track, or leave it blank and ask for a title."></textarea></div>
+              <button class="secondary small" type="button" id="ai-ask">Ask the assistant</button>
+              <div class="ai-output" id="ai-output" role="status" aria-live="polite"></div>
+            </div>
+            <div class="studio-card">
+              <div class="studio-head"><h2>Your uploads</h2><span class="section-note" id="quota-line"></span></div>
+              <div class="track-list" id="my-tracks"></div>
+            </div>
+          </div>
+        </section>
         <section id="search-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">FIND YOUR SOUND</span><h1>Search your library</h1><p>Find saved Spotify links, free-source tracks, original demos and your own audio.</p></div><div class="searchbox"><svg><use href="#i-search"/></svg><input id="search-input" type="search" placeholder="Search songs, artists, Spotify links…" autocomplete="off"></div><div class="section-heading"><h2>Results</h2><span id="search-count" class="section-note"></span></div><div class="track-list" id="search-results"></div></section>
         <section id="library-panel" class="page-panel hidden"><div class="page-intro"><span class="eyebrow">YOUR COLLECTION</span><h1>Your Library</h1><p>Your music, saved open tracks and favorite stations.</p></div><div class="library-toolbar"><button id="library-upload" class="primary small"><svg><use href="#i-upload"/></svg> Add audio files</button><button id="library-spotify" class="secondary small"><svg><use href="#i-plus"/></svg> Save Spotify link</button></div><div class="section-heading"><h2>All tracks & links</h2><span id="library-count" class="section-note"></span></div><div class="track-list" id="library-list"></div></section>
         <section id="collection-panel" class="page-panel hidden"><div class="collection-hero"><div class="collection-icon" id="collection-icon">♥</div><div><span class="eyebrow">PLAYLIST</span><h1 id="collection-title">Liked Songs</h1><p id="collection-subtitle">Your favourite sounds.</p></div></div><div class="track-list" id="collection-list"></div></section>
@@ -86,8 +168,10 @@
   <input id="file-input" type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.opus,.aac,.webm" hidden>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="spotify-dialog" class="modal"><form method="dialog" id="spotify-form"><div class="modal-top"><span class="modal-kicker">SPOTIFY INTEGRATION</span><button type="button" class="icon-button" id="close-dialog" aria-label="Close"><svg><use href="#i-close"/></svg></button></div><h2>Save a Spotify link</h2><p>Paste a public track, album, playlist, artist, show or episode link. Playback uses Spotify's official embedded player.</p><label for="spotify-url">Spotify URL or URI</label><input required id="spotify-url" name="url" placeholder="https://open.spotify.com/track/…" autocomplete="off"><label for="spotify-name">Your display title (optional)</label><input id="spotify-name" name="name" placeholder="My favorite song"><div id="modal-error" class="modal-error" aria-live="polite"></div><div class="modal-actions"><button type="button" class="secondary" id="cancel-dialog">Cancel</button><button type="submit" class="primary">Save to library</button></div></form></dialog><dialog id="playlist-dialog" class="modal"><div class="modal-top"><span class="modal-kicker">PLAYLISTS</span><button type="button" class="icon-button" id="playlist-close" aria-label="Close"><svg><use href="#i-close"/></svg></button></div><h2 id="playlist-heading">Add to a playlist</h2><p id="playlist-hint">Pick where this belongs, or make a new one.</p><div id="playlist-options" class="playlist-options" role="radiogroup" aria-label="Existing playlists"></div><label for="playlist-new">New playlist name</label><input id="playlist-new" placeholder="Summer sessions" maxlength="60" autocomplete="off"><div id="playlist-error" class="modal-error" aria-live="polite"></div><div class="modal-actions"><button type="button" class="secondary" id="playlist-cancel">Cancel</button><button type="button" class="primary" id="playlist-save">Add</button></div></dialog><dialog id="confirm-dialog" class="modal"><div class="modal-top"><span class="modal-kicker">CONFIRM</span></div><h2 id="confirm-title">Delete this?</h2><p id="confirm-message"></p><div class="modal-actions"><button type="button" class="secondary" id="confirm-cancel">Keep it</button><button type="button" class="danger" id="confirm-ok">Delete</button></div></dialog>
+  <dialog id="takedown-dialog" class="modal"><div class="modal-top"><span class="modal-kicker">RIGHTS NOTICE</span><button type="button" class="icon-button" id="takedown-close" aria-label="Close"><svg><use href="#i-close"/></svg></button></div><h2>Report a recording</h2><p>Notice-and-takedown: the recording is disabled as soon as this is filed, and its audio fingerprint is blocked from re-upload.</p><form id="takedown-form"><label for="takedown-target">Recording link or id</label><input id="takedown-target" maxlength="300" placeholder="/api/stream/t-xxxxxxxxx" autocomplete="off"><label for="takedown-email">Your email</label><input id="takedown-email" type="email" autocomplete="email" placeholder="you@label.com"><label for="takedown-notice">What you own, and why this upload infringes it</label><textarea id="takedown-notice" rows="4" maxlength="4000"></textarea><label class="rights-label"><input type="checkbox" id="takedown-good"><span>I have a good-faith belief that this use is not authorised, and I am the rights owner or authorised to act for it.</span></label><div id="takedown-error" class="modal-error" aria-live="polite"></div><div class="modal-actions"><button type="button" class="secondary" id="takedown-cancel">Cancel</button><button type="submit" class="primary">Send notice</button></div></form><p id="takedown-done" class="rights-done" role="status"></p></dialog>
   <audio id="audio" preload="metadata"></audio>
   <script type="module" src="./src/app.mjs"></script>
   <script type="module" src="./src/free-catalog.mjs"></script>
+  <script type="module" src="./src/artist.mjs"></script>
 </body>
 </html>

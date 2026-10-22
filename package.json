@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Local-first music library with Spotify official embeds",
+  "description": "Free and open music discovery with artist uploads hosted on this server",
   "scripts": {
-    "start": "python3 -m http.server 5173",
+    "start": "node server/server.mjs",
+    "static": "python3 -m http.server 5173",
     "test": "node --test tests/*.test.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=20" }
 }
