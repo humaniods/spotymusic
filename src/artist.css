@@ -36,6 +36,19 @@
 .community-mood { margin: 4px 0 18px; display: grid; gap: 8px; }
 .community-mood label { font-size: 11px; font-weight: 800; color: #c8d4cc; }
 .free-disclaimer .text-link { background: none; border: 0; color: #b0e989; font: inherit; text-decoration: underline; padding: 0; }
+/* Glass theme for the studio and community screens, using the tokens declared in styles.css.
+   The studio has at most a handful of cards on screen, so those can afford a real blur; the
+   upload rows below them stay plain translucent. */
+.studio-card, .artist-head { background: linear-gradient(160deg, var(--glass-hi), rgba(255,255,255,.02) 42%), var(--glass); border: 1px solid var(--glass-edge); border-radius: 16px; box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+.studio-card input:not([type="checkbox"]), .studio-card textarea, .studio-card select, .community-mood input { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)), rgba(10,14,15,.52); border: 1px solid var(--glass-edge-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+/* Re-asserted because the glass border above would otherwise tie with, and come after, the
+   original focus rule, which is the only thing telling an artist which field they are in. */
+.studio-card input:focus, .studio-card textarea:focus, .studio-card select:focus, .community-mood input:focus { border-color: var(--green); }
+.studio-card input[type="file"] { background: rgba(255,255,255,.05); border: 1px dashed var(--glass-edge-soft); }
+.rights-box, .rights-done { background: linear-gradient(165deg, rgba(182,255,82,.09), rgba(255,255,255,.02)), rgba(14,24,17,.5); border: 1px solid rgba(182,255,82,.24); }
+.ai-output { background: rgba(255,255,255,.045); border: 1px solid var(--glass-edge-soft); border-radius: 10px; padding: 12px 14px; }
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { .studio-card, .artist-head { background: #161a1c } }
+@media (prefers-reduced-transparency: reduce) { .studio-card, .artist-head { backdrop-filter: none; -webkit-backdrop-filter: none; background: #161a1c } }
 @media (max-width: 900px) {
   .ai-row { grid-template-columns: minmax(0, 1fr); }
   #community-results .track-item, #my-tracks .track-item { grid-template-columns: 26px 38px minmax(0, 1fr) 26px 26px 26px; }
