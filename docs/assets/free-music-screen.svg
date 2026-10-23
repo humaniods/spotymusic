@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bgA" cx="10%" cy="6%" r="55%"><stop offset="0" stop-color="#3f7837" stop-opacity=".6"/><stop offset="1" stop-color="#3f7837" stop-opacity="0"/></radialGradient>
+    <radialGradient id="bgB" cx="88%" cy="90%" r="50%"><stop offset="0" stop-color="#4e3066" stop-opacity=".55"/><stop offset="1" stop-color="#4e3066" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pane2" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".08"/><stop offset="1" stop-color="#ffffff" stop-opacity=".02"/></linearGradient>
+  </defs>
+  <rect width="1200" height="660" fill="#0a0d0f"/>
+  <rect width="1200" height="660" fill="url(#bgA)"/>
+  <rect width="1200" height="660" fill="url(#bgB)"/>
+
+  <rect x="14" y="14" width="740" height="588" rx="16" fill="url(#pane2)" stroke="#ffffff" stroke-opacity=".16"/>
+  <text x="40" y="40" fill="#b6ff52" font-size="10" font-weight="800" letter-spacing="1.6">4 FREE OPEN MUSIC SOURCES</text>
+  <text x="40" y="70" fill="#f2f5f3" font-size="26" font-weight="800">Discover music. Pay nothing.</text>
+  <text x="40" y="92" fill="#96a19e" font-size="11">Four open catalogs queried at the same time. Availability depends on each source.</text>
+
+  <text x="40" y="118" fill="#c8d4cc" font-size="12" font-weight="800">Search the free streaming catalog</text>
+  <rect x="40" y="130" width="520" height="42" rx="9" fill="#0a0e0f" fill-opacity=".55" stroke="#ffffff" stroke-opacity=".1"/>
+  <text x="58" y="156" fill="#f6f8f6" font-size="13">lofi night drive</text>
+  <rect x="574" y="130" width="130" height="42" rx="9" fill="#b6ff52"/>
+  <text x="594" y="156" fill="#192617" font-size="12" font-weight="800">Search music</text>
+
+  <text x="40" y="200" fill="#c9d8cb" font-size="12" font-weight="800">Music source</text>
+  <rect x="150" y="184" width="240" height="34" rx="9" fill="#0a0e0f" fill-opacity=".6" stroke="#ffffff" stroke-opacity=".1"/>
+  <text x="166" y="206" fill="#f2f6f3" font-size="13">All 4 sources ▾</text>
+
+  <g font-size="11" font-weight="800">
+    <rect x="40" y="232" width="130" height="32" rx="8" fill="#b6ff52"/>
+    <text x="56" y="252" fill="#172519">New releases</text>
+    <rect x="180" y="232" width="140" height="32" rx="8" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".1"/>
+    <text x="196" y="252" fill="#d7e2d8">Popular &amp; radio</text>
+  </g>
+
+  <text x="40" y="292" fill="#b6ff52" font-size="11" font-weight="700">33 listings found · All free sources · Internet Radio unavailable</text>
+
+  <g font-size="12" font-weight="800">
+    <rect x="40" y="304" width="684" height="48" rx="10" fill="#ffffff" fill-opacity=".07" stroke="#ffffff" stroke-opacity=".08"/>
+    <rect x="52" y="312" width="32" height="32" rx="6" fill="#225e60"/>
+    <text x="96" y="322" fill="#f7f7f7">Night Drive Tapes</text>
+    <text x="96" y="336" fill="#94a09c" font-size="10" font-weight="400">Kassette</text>
+    <text x="96" y="348" fill="#8fbf7a" font-size="9" font-weight="400">Audius · See source terms ↗</text>
+    <text x="560" y="330" fill="#85908b" font-size="9" font-weight="800">AUDIUS</text>
+    <text x="640" y="330" fill="#b6ff52" font-size="10">▶ ♥ ＋</text>
+
+    <rect x="40" y="358" width="684" height="48" rx="10" stroke="#ffffff" stroke-opacity=".06"/>
+    <rect x="52" y="366" width="32" height="32" rx="6" fill="#314d2c"/>
+    <text x="96" y="376" fill="#f7f7f7">Synth Study No. 4</text>
+    <text x="96" y="390" fill="#94a09c" font-size="10" font-weight="400">Open Lab Records</text>
+    <text x="96" y="402" fill="#8fbf7a" font-size="9" font-weight="400">Openverse · CC BY-NC 4.0 ↗</text>
+    <text x="540" y="384" fill="#85908b" font-size="9" font-weight="800">OPENVERSE</text>
+    <text x="640" y="384" fill="#949c98" font-size="10">▶ ♥ ＋</text>
+
+    <rect x="40" y="412" width="684" height="48" rx="10" stroke="#ffffff" stroke-opacity=".06"/>
+    <rect x="52" y="420" width="32" height="32" rx="6" fill="#84627a"/>
+    <text x="96" y="430" fill="#f7f7f7">Monsoon on a Tin Roof</text>
+    <text x="96" y="444" fill="#94a09c" font-size="10" font-weight="400">Field Notes Archive</text>
+    <text x="96" y="456" fill="#8fbf7a" font-size="9" font-weight="400">Wikimedia Commons · Public domain ↗</text>
+    <text x="500" y="438" fill="#85908b" font-size="9" font-weight="800">WIKIMEDIA COMMONS</text>
+    <text x="640" y="438" fill="#949c98" font-size="10">▶ ♥ ＋</text>
+
+    <rect x="40" y="466" width="684" height="48" rx="10" stroke="#ffffff" stroke-opacity=".06"/>
+    <rect x="52" y="474" width="32" height="32" rx="6" fill="#2b3d51"/>
+    <text x="96" y="484" fill="#f7f7f7">Radio Apna 24x7</text>
+    <text x="96" y="498" fill="#94a09c" font-size="10" font-weight="400">Streaming now · no position to seek</text>
+    <text x="96" y="510" fill="#8fbf7a" font-size="9" font-weight="400">Internet Radio · station's own terms ↗</text>
+    <rect x="600" y="480" width="98" height="20" rx="5" fill="#b6ff52" fill-opacity=".18" stroke="#b6ff52" stroke-opacity=".3"/>
+    <text x="612" y="494" fill="#d6ffa6" font-size="9" font-weight="800">LIVE RADIO</text>
+  </g>
+
+  <line x1="40" y1="536" x2="724" y2="536" stroke="#ffffff" stroke-opacity=".12"/>
+  <text x="40" y="560" fill="#94a29b" font-size="10">Every result keeps its own attribution and licence. OpenMic's MIT licence covers app code only — it never</text>
+  <text x="40" y="576" fill="#94a29b" font-size="10">grants a right to copy, re-host or redistribute the recordings themselves.</text>
+
+  <!-- fan-out diagram -->
+  <rect x="774" y="14" width="412" height="588" rx="16" fill="url(#pane2)" stroke="#ffffff" stroke-opacity=".16"/>
+  <text x="798" y="52" fill="#f2f5f3" font-size="16" font-weight="800">One search, four calls</text>
+  <text x="798" y="72" fill="#96a19e" font-size="10">Promise-settled independently in src/providers.mjs</text>
+
+  <rect x="880" y="92" width="200" height="36" rx="9" fill="#b6ff52"/>
+  <text x="900" y="115" fill="#192617" font-size="12" font-weight="800">Free Music search</text>
+
+  <g stroke="#ffffff" stroke-opacity=".28" fill="none">
+    <path d="M980 128 V150 M830 150 H1130"/><path d="M830 150 V172 M930 150 V172 M1030 150 V172 M1130 150 V172"/>
+  </g>
+
+  <g font-size="11" font-weight="800">
+    <rect x="792" y="172" width="80" height="88" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".35"/>
+    <text x="804" y="196" fill="#dcffc8">Audius</text>
+    <text x="800" y="216" fill="#94a09c" font-size="9" font-weight="400">latest +</text>
+    <text x="800" y="230" fill="#94a09c" font-size="9" font-weight="400">trending</text>
+    <rect x="800" y="240" width="64" height="12" rx="3" fill="#b6ff52" fill-opacity=".3"/>
+
+    <rect x="892" y="172" width="80" height="88" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".35"/>
+    <text x="898" y="196" fill="#dcffc8">Openverse</text>
+    <text x="900" y="216" fill="#94a09c" font-size="9" font-weight="400">CC audio</text>
+    <text x="900" y="230" fill="#94a09c" font-size="9" font-weight="400">+ licence</text>
+    <rect x="900" y="240" width="52" height="12" rx="3" fill="#b6ff52" fill-opacity=".3"/>
+
+    <rect x="992" y="172" width="80" height="88" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".35"/>
+    <text x="998" y="196" fill="#dcffc8">Commons</text>
+    <text x="1000" y="216" fill="#94a09c" font-size="9" font-weight="400">open files</text>
+    <text x="1000" y="230" fill="#94a09c" font-size="9" font-weight="400">junk filtered</text>
+    <rect x="1000" y="240" width="40" height="12" rx="3" fill="#b6ff52" fill-opacity=".3"/>
+
+    <rect x="1092" y="172" width="80" height="88" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ff8f8f" stroke-opacity=".5"/>
+    <text x="1098" y="196" fill="#ffd0d0">Radio</text>
+    <text x="1100" y="216" fill="#94a09c" font-size="9" font-weight="400">station list</text>
+    <text x="1100" y="230" fill="#94a09c" font-size="9" font-weight="400">429 → backoff</text>
+    <rect x="1100" y="240" width="20" height="12" rx="3" fill="#ff8f8f" fill-opacity=".4"/>
+  </g>
+
+  <text x="798" y="292" fill="#f2f5f3" font-size="14" font-weight="800">What each source genuinely gives you</text>
+  <g font-size="10" fill="#9facaa">
+    <text x="798" y="316">Audius is a real chronological upload catalog — closest thing to "newest songs",</text>
+    <text x="798" y="330">but only for the independent artists who publish there.</text>
+    <text x="798" y="354">Openverse sorts by recently indexed, not released today.</text>
+    <text x="798" y="378">Commons and Radio are search / top-ranked directories, not release calendars.</text>
+    <text x="798" y="402">Commercial blockbusters (Spotify/Apple catalog) are deliberately not here.</text>
+  </g>
+
+  <rect x="792" y="424" width="376" height="150" rx="12" fill="#0e1811" fill-opacity=".5" stroke="#b6ff52" stroke-opacity=".24"/>
+  <text x="812" y="452" fill="#b6ff52" font-size="11" font-weight="800">LIMITATIONS WE CLOSED</text>
+  <g font-size="10" fill="#cfe0cb">
+    <text x="812" y="476">· Openverse died after an API change — rebuilt on /v1/</text>
+    <text x="812" y="494">· Commons served spoken word and video — audio filter</text>
+    <text x="812" y="512">· 429s gave silent empty pages — retry with backoff</text>
+    <text x="812" y="530">· one slow source blanked the page — each settles alone</text>
+    <text x="812" y="548">· dead streams left ghost rows — probe forgets them</text>
+  </g>
+  <text x="14" y="628" fill="#68716f" font-size="11">Free Music screen and the multi-source fan-out, drawn from index.html, free-music.css, src/providers.mjs and</text>
+  <text x="14" y="644" fill="#68716f" font-size="11">src/free-catalog.mjs. Labelled wireframe, not a pixel capture.</text>
+</svg>

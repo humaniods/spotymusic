@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="glowA" cx="12%" cy="8%" r="55%"><stop offset="0" stop-color="#3f7837" stop-opacity=".65"/><stop offset="1" stop-color="#3f7837" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowB" cx="90%" cy="12%" r="50%"><stop offset="0" stop-color="#1c545e" stop-opacity=".7"/><stop offset="1" stop-color="#1c545e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowC" cx="70%" cy="96%" r="55%"><stop offset="0" stop-color="#4e3066" stop-opacity=".6"/><stop offset="1" stop-color="#4e3066" stop-opacity="0"/></radialGradient>
+    <radialGradient id="heroGlow" cx="78%" cy="50%" r="45%"><stop offset="0" stop-color="#84ce50" stop-opacity=".45"/><stop offset="1" stop-color="#84ce50" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pane" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".08"/><stop offset="1" stop-color="#ffffff" stop-opacity=".02"/></linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".07"/><stop offset="1" stop-color="#ffffff" stop-opacity=".02"/></linearGradient>
+  </defs>
+
+  <rect width="1200" height="780" fill="#0a0d0f"/>
+  <rect width="1200" height="780" fill="url(#glowA)"/>
+  <rect width="1200" height="780" fill="url(#glowB)"/>
+  <rect width="1200" height="780" fill="url(#glowC)"/>
+
+  <!-- sidebar -->
+  <g>
+    <rect x="14" y="14" width="228" height="608" rx="16" fill="url(#pane)" stroke="#ffffff" stroke-opacity=".16"/>
+    <rect x="34" y="40" width="26" height="26" rx="7" fill="#b6ff52" transform="rotate(-12 47 53)"/>
+    <text x="70" y="60" fill="#f4f6f5" font-size="21" font-weight="700">OpenMic</text>
+    <text x="160" y="52" fill="#b6ff52" font-size="9" font-weight="700">MIT</text>
+    <g font-size="13" font-weight="700">
+      <rect x="28" y="96" width="200" height="36" rx="8" fill="#b6ff52" fill-opacity=".16"/>
+      <text x="52" y="119" fill="#dcffc8">Home</text>
+      <text x="52" y="159" fill="#aeb4b4">Search</text>
+      <rect x="28" y="174" width="200" height="34" rx="8" fill="#ffffff" fill-opacity=".05"/>
+      <text x="52" y="196" fill="#dcffc8">Free Music</text>
+      <rect x="150" y="182" width="42" height="17" rx="4" fill="#b6ff52" fill-opacity=".22"/>
+      <text x="156" y="194" fill="#d6ffa6" font-size="9">NEW</text>
+      <text x="52" y="236" fill="#aeb4b4">Community</text>
+      <text x="52" y="276" fill="#aeb4b4">For artists</text>
+      <text x="52" y="316" fill="#aeb4b4">Your Library</text>
+      <text x="52" y="356" fill="#aeb4b4">Liked Songs</text>
+    </g>
+    <text x="34" y="404" fill="#939b9a" font-size="10" font-weight="700" letter-spacing="1.4">PLAYLISTS</text>
+    <g font-size="12" fill="#ccd1d1">
+      <rect x="28" y="418" width="200" height="32" rx="8" fill="#ffffff" fill-opacity=".09"/>
+      <text x="48" y="438">Monsoon sessions</text>
+      <text x="48" y="472">Weekend focus</text>
+      <text x="48" y="506">+ New playlist</text>
+    </g>
+    <line x1="34" y1="546" x2="222" y2="546" stroke="#ffffff" stroke-opacity=".12"/>
+    <circle cx="42" cy="572" r="4" fill="#a4f34d"/>
+    <text x="54" y="576" fill="#788481" font-size="10">Server online · artist uploads on</text>
+  </g>
+
+  <!-- main panel -->
+  <g>
+    <rect x="254" y="14" width="672" height="608" rx="16" fill="url(#pane)" stroke="#ffffff" stroke-opacity=".16"/>
+    <rect x="255" y="15" width="670" height="62" rx="15" fill="#ffffff" fill-opacity=".04"/>
+    <circle cx="282" cy="46" r="4" fill="#b6ff52"/>
+    <text x="296" y="50" fill="#a9b3b3" font-size="12" font-weight="700">Home</text>
+    <rect x="742" y="30" width="82" height="32" rx="9" fill="#ffffff" fill-opacity=".1" stroke="#ffffff" stroke-opacity=".1"/>
+    <text x="758" y="51" fill="#f4f4f4" font-size="11" font-weight="700">Upload</text>
+    <rect x="834" y="30" width="76" height="32" rx="9" fill="#b6ff52"/>
+    <text x="848" y="51" fill="#192617" font-size="11" font-weight="800">For artists</text>
+
+    <!-- hero -->
+    <rect x="280" y="96" width="620" height="252" rx="18" fill="#1d2c21" fill-opacity=".7" stroke="#ffffff" stroke-opacity=".16"/>
+    <rect x="280" y="96" width="620" height="252" rx="18" fill="url(#heroGlow)"/>
+    <text x="306" y="136" fill="#b6ff52" font-size="10" font-weight="800" letter-spacing="1.8">YOUR MUSIC SPACE</text>
+    <text x="306" y="178" fill="#f2f5f3" font-size="30" font-weight="800">All your music.</text>
+    <text x="306" y="212" fill="#b6ff52" font-size="30" font-weight="800">One beautiful place.</text>
+    <text x="306" y="242" fill="#bfcbc4" font-size="11">Four open catalogs · artist uploads on your own server · live radio · your own files.</text>
+    <rect x="306" y="262" width="176" height="38" rx="9" fill="#b6ff52"/>
+    <text x="326" y="286" fill="#192617" font-size="11" font-weight="800">Add your music</text>
+    <rect x="494" y="262" width="140" height="38" rx="9" fill="#ffffff" fill-opacity=".08" stroke="#ffffff" stroke-opacity=".12"/>
+    <text x="514" y="286" fill="#e4f6ce" font-size="11" font-weight="700">Browse free music</text>
+    <circle cx="800" cy="222" r="66" fill="#17191b" stroke="#39443b"/>
+    <circle cx="800" cy="222" r="60" fill="none" stroke="#242928" stroke-dasharray="2 3"/>
+    <circle cx="800" cy="222" r="24" fill="#b6ff52"/>
+    <circle cx="800" cy="222" r="5" fill="#182a16"/>
+    <text x="770" y="226" fill="#263726" font-size="9" font-weight="800">OPEN·MIC</text>
+
+    <!-- recently added -->
+    <text x="280" y="384" fill="#f0f3f1" font-size="19" font-weight="800">Recently added</text>
+    <text x="828" y="384" fill="#87918e" font-size="11" font-weight="800">View library →</text>
+    <g font-size="12" font-weight="800">
+      <rect x="280" y="398" width="620" height="52" rx="10" fill="#ffffff" fill-opacity=".07" stroke="#ffffff" stroke-opacity=".08"/>
+      <rect x="292" y="408" width="32" height="32" rx="6" fill="#225e60"/>
+      <text x="336" y="420" fill="#f7f7f7">Night Bus — Last Train Home</text>
+      <text x="336" y="438" fill="#94a09c" font-size="10" font-weight="400">community · @night-bus · published by the artist</text>
+      <text x="836" y="428" fill="#b6ff52" font-size="10">♥</text>
+      <rect x="280" y="456" width="620" height="52" rx="10" stroke="#ffffff" stroke-opacity=".06"/>
+      <rect x="292" y="466" width="32" height="32" rx="6" fill="#314d2c"/>
+      <text x="336" y="478" fill="#f7f7f7">Monsoon Sketches — Rain On Tin</text>
+      <text x="336" y="496" fill="#94a09c" font-size="10" font-weight="400">audius · artist-uploaded stream</text>
+      <rect x="280" y="514" width="620" height="52" rx="10" stroke="#ffffff" stroke-opacity=".06"/>
+      <rect x="292" y="524" width="32" height="32" rx="6" fill="#84627a"/>
+      <text x="336" y="536" fill="#f7f7f7">My own demo — studio take 04</text>
+      <text x="336" y="554" fill="#94a09c" font-size="10" font-weight="400">local file · IndexedDB, never uploaded</text>
+    </g>
+    <text x="280" y="592" fill="#68716f" font-size="10">Each row carries its provider credit and a source link. Rows are plain translucent fills, not blurred</text>
+    <text x="280" y="606" fill="#68716f" font-size="10">layers — a few hundred blurred rows is what turns a smooth player into a stalled one.</text>
+  </g>
+
+  <!-- right bar -->
+  <g>
+    <rect x="938" y="14" width="248" height="608" rx="16" fill="url(#pane)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="958" y="46" fill="#9aaba3" font-size="10" font-weight="800" letter-spacing="1.2">NOW PLAYING</text>
+    <rect x="1092" y="32" width="74" height="20" rx="6" fill="#2b3729"/>
+    <text x="1100" y="46" fill="#a8eb68" font-size="9">community</text>
+    <rect x="958" y="66" width="208" height="208" rx="10" fill="#1b4a4d"/>
+    <text x="1032" y="188" fill="#ffffff" fill-opacity=".5" font-size="60">♪</text>
+    <text x="958" y="304" fill="#f2f5f3" font-size="17" font-weight="800">Last Train Home</text>
+    <text x="958" y="324" fill="#9aa39f" font-size="11">Night Bus · @night-bus</text>
+    <rect x="958" y="348" width="208" height="96" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".1"/>
+    <text x="974" y="372" fill="#e6ece9" font-size="12" font-weight="800">Range-streamed audio</text>
+    <text x="974" y="394" fill="#9facaa" font-size="10">HTTP 206 partial reads, so seeking</text>
+    <text x="974" y="410" fill="#9facaa" font-size="10">long files only moves the bytes the</text>
+    <text x="974" y="426" fill="#9facaa" font-size="10">player actually asks for.</text>
+    <line x1="958" y1="466" x2="1166" y2="466" stroke="#ffffff" stroke-opacity=".12"/>
+    <text x="958" y="492" fill="#9bab9e" font-size="10" font-weight="800" letter-spacing="1.2">QUICK TIPS</text>
+    <text x="958" y="516" fill="#a8b0ae" font-size="10"><tspan fill="#b6ff52" font-weight="800">Drop</tspan> audio files anywhere to import.</text>
+    <text x="958" y="536" fill="#a8b0ae" font-size="10"><tspan fill="#b6ff52" font-weight="800">Flag</tspan> a row to file a takedown notice.</text>
+    <text x="958" y="556" fill="#a8b0ae" font-size="10"><tspan fill="#b6ff52" font-weight="800">Radio</tspan> rows disable seeking: they are live.</text>
+    <text x="958" y="596" fill="#68716f" font-size="10">No ads, no tracker, no upsell screen.</text>
+  </g>
+
+  <!-- player -->
+  <g>
+    <rect x="14" y="634" width="1172" height="104" rx="14" fill="#ffffff" fill-opacity=".07" stroke="#ffffff" stroke-opacity=".16"/>
+    <rect x="34" y="656" width="60" height="60" rx="8" fill="#2c3b32"/>
+    <text x="52" y="696" fill="#b5ff51" font-size="24">♪</text>
+    <text x="108" y="682" fill="#f2f5f3" font-size="12" font-weight="800">Last Train Home</text>
+    <text x="108" y="700" fill="#8e9b97" font-size="10">Night Bus · uploaded by @night-bus</text>
+    <g fill="#b0b7b4" font-size="16">
+      <text x="420" y="676">⤨</text><text x="470" y="676">◁</text><text x="530" y="682">▷</text><text x="592" y="676">▷|</text><text x="640" y="676">↻</text>
+    </g>
+    <circle cx="538" cy="676" r="17" fill="#ebf2e8"/>
+    <text x="531" y="683" fill="#161e18" font-size="14">▶</text>
+    <text x="420" y="712" fill="#99a39f" font-size="10">0:48</text>
+    <rect x="460" y="706" width="180" height="4" rx="2" fill="#ffffff" fill-opacity=".18"/>
+    <rect x="460" y="706" width="66" height="4" rx="2" fill="#b6ff52"/>
+    <text x="650" y="712" fill="#99a39f" font-size="10">3:12</text>
+    <text x="1010" y="676" fill="#a5b1ab" font-size="11">♥  ≡  🔊</text>
+    <rect x="1060" y="704" width="90" height="4" rx="2" fill="#ffffff" fill-opacity=".18"/>
+    <rect x="1060" y="704" width="56" height="4" rx="2" fill="#b6ff52"/>
+    <text x="1100" y="682" fill="#718078" font-size="9" font-weight="800" letter-spacing=".6">OPENMIC</text>
+  </g>
+
+  <text x="14" y="752" fill="#68716f" font-size="11">Layout map of the Home screen (glassmorphism theme). Drawn from the real DOM structure in index.html /</text>
+  <text x="14" y="768" fill="#68716f" font-size="11">styles.css — it is a labelled wireframe, not a pixel capture.</text>
+</svg>

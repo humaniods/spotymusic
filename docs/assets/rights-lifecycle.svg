@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bgE" cx="10%" cy="10%" r="60%"><stop offset="0" stop-color="#3f7837" stop-opacity=".5"/><stop offset="1" stop-color="#3f7837" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pane4" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".08"/><stop offset="1" stop-color="#ffffff" stop-opacity=".02"/></linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#b6ff52" fill-opacity=".8"/></marker>
+    <marker id="arwR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#ff8f8f" fill-opacity=".85"/></marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#9fb7c9" fill-opacity=".9"/></marker>
+  </defs>
+  <rect width="1200" height="700" fill="#0a0d0f"/>
+  <rect width="1200" height="700" fill="url(#bgE)"/>
+
+  <text x="24" y="44" fill="#f2f5f3" font-size="22" font-weight="800">Rights lifecycle: publish → listen → notice → removal → strike</text>
+  <text x="24" y="66" fill="#96a19e" font-size="11">Every hop below is implemented and covered by a test in tests/server.test.mjs; nothing here is a policy document.</text>
+
+  <!-- lanes -->
+  <g font-size="10" font-weight="800" fill="#8fa39a" letter-spacing="1.4">
+    <text x="24" y="112">ARTIST</text>
+    <text x="24" y="292">OPENMIC SERVER</text>
+    <text x="24" y="500">RIGHTSHOLDER / LISTENER</text>
+  </g>
+  <g stroke="#ffffff" stroke-opacity=".08">
+    <line x1="24" y1="126" x2="1176" y2="126"/><line x1="24" y1="318" x2="1176" y2="318"/><line x1="24" y1="466" x2="1176" y2="466"/>
+  </g>
+
+  <!-- artist lane -->
+  <g font-size="11" font-weight="800">
+    <rect x="96" y="146" width="150" height="56" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="112" y="170" fill="#f2f5f3">1 · Upload file</text>
+    <text x="112" y="188" fill="#94a09c" font-size="9" font-weight="400">metadata then raw bytes</text>
+
+    <rect x="300" y="146" width="164" height="56" rx="12" fill="url(#pane4)" stroke="#b6ff52" stroke-opacity=".4"/>
+    <text x="314" y="170" fill="#dcffc8">2 · Accept warranty</text>
+    <text x="314" y="188" fill="#94a09c" font-size="9" font-weight="400">openmic-rights-1, per upload</text>
+
+    <rect x="520" y="146" width="150" height="56" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="534" y="170" fill="#f2f5f3">3 · Published</text>
+    <text x="534" y="188" fill="#94a09c" font-size="9" font-weight="400">visible in Community</text>
+
+    <rect x="880" y="146" width="188" height="56" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="894" y="170" fill="#f2f5f3">7 · Counter-notice</text>
+    <text x="894" y="188" fill="#94a09c" font-size="9" font-weight="400">agent address is in the confirmation</text>
+  </g>
+  <g stroke="#b6ff52" stroke-opacity=".55" fill="none" marker-end="url(#arw)">
+    <path d="M246 174 H296"/><path d="M464 174 H516"/>
+  </g>
+
+  <!-- server lane -->
+  <g font-size="11" font-weight="800">
+    <rect x="240" y="338" width="230" height="66" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="256" y="364" fill="#f2f5f3">4 · Gate the bytes</text>
+    <text x="256" y="382" fill="#94a09c" font-size="9" font-weight="400">magic bytes = extension · MIME allowlist</text>
+    <text x="256" y="396" fill="#94a09c" font-size="9" font-weight="400">25 MB/file · 200 MB &amp; 60 tracks/profile</text>
+
+    <rect x="520" y="338" width="200" height="66" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="536" y="364" fill="#f2f5f3">5 · Stream on Range</text>
+    <text x="536" y="382" fill="#94a09c" font-size="9" font-weight="400">206 partial reads · immutable cache</text>
+    <text x="536" y="396" fill="#94a09c" font-size="9" font-weight="400">artist page credit on every row</text>
+
+    <rect x="770" y="338" width="252" height="66" rx="12" fill="#160f10" fill-opacity=".6" stroke="#ff8f8f" stroke-opacity=".45"/>
+    <text x="786" y="364" fill="#ffd0d0">6 · Valid notice → delete</text>
+    <text x="786" y="382" fill="#c9b3b3" font-size="9" font-weight="400">metadata + audio removed immediately,</text>
+    <text x="786" y="396" fill="#c9b3b3" font-size="9" font-weight="400">SHA-256 fingerprint denylisted forever</text>
+
+    <rect x="770" y="420" width="252" height="42" rx="12" fill="#160f10" fill-opacity=".6" stroke="#ff8f8f" stroke-opacity=".45"/>
+    <text x="786" y="440" fill="#ffd0d0" font-size="11" font-weight="800">8 · Two notices terminate the account</text>
+    <text x="786" y="454" fill="#c9b3b3" font-size="9" font-weight="400">remaining tracks removed, handle locked out</text>
+  </g>
+  <g stroke="#b6ff52" stroke-opacity=".5" fill="none" marker-end="url(#arw)">
+    <path d="M595 202 V270 H355 V332"/><path d="M470 371 H516"/><path d="M620 404 V514"/>
+  </g>
+  <g stroke="#ff8f8f" stroke-opacity=".55" fill="none" marker-end="url(#arwR)">
+    <path d="M720 371 H766"/><path d="M896 404 V416"/><path d="M720 550 H766"/>
+  </g>
+  <g stroke="#9fb7c9" stroke-opacity=".5" stroke-dasharray="5 4" fill="none" marker-end="url(#arG)">
+    <path d="M1000 338 V208"/>
+  </g>
+  <g font-size="9" fill="#9fb7c9">
+    <text x="1008" y="280">counter-notice address</text><text x="1008" y="292">is on the confirmation</text>
+  </g>
+  <text x="904" y="416" fill="#ff8f8f" font-size="9">a second notice</text>
+
+  <!-- rightsholder lane -->
+  <g font-size="11" font-weight="800">
+    <rect x="520" y="520" width="200" height="60" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="536" y="546" fill="#f2f5f3">Flag button on the row</text>
+    <text x="536" y="564" fill="#94a09c" font-size="9" font-weight="400">anonymous is allowed</text>
+
+    <rect x="770" y="520" width="252" height="60" rx="12" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="786" y="546" fill="#f2f5f3">Notice form must be complete</text>
+    <text x="786" y="564" fill="#94a09c" font-size="9" font-weight="400">work · URL · contact · good-faith statement</text>
+
+    <rect x="96" y="520" width="330" height="60" rx="12" fill="url(#pane4)" stroke="#b6ff52" stroke-opacity=".3"/>
+    <text x="112" y="546" fill="#dcffc8">Own-file delete is not a strike</text>
+    <text x="112" y="564" fill="#94a09c" font-size="9" font-weight="400">and does not poison the fingerprint — the same take can be re-uploaded</text>
+  </g>
+
+  <!-- outcome panel -->
+  <rect x="24" y="612" width="1152" height="70" rx="14" fill="url(#pane4)" stroke="#ffffff" stroke-opacity=".14"/>
+  <text x="46" y="640" fill="#b6ff52" font-size="11" font-weight="800">OUT OF SCOPE, ON PURPOSE</text>
+  <text x="46" y="662" fill="#cfe0cb" font-size="10">OpenMic does not obtain mechanical licences (US MLC) and does not implement EU Art. 17 upload filtering. Covers therefore need the artist's own licence —</text>
+  <text x="46" y="676" fill="#cfe0cb" font-size="10">that is exactly what the warranty text and the assistant's cover/sample/remix warnings exist to say. Set a real OPENMIC_DMCA_EMAIL before going public.</text>
+</svg>

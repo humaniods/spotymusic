@@ -1,109 +1,186 @@
-# OpenMic — open-source, no-subscription music player
+# OpenMic — open-source, no-subscription music player **and** artist publishing
 
-A responsive, local-first **MIT-licensed** music player that searches multiple free-to-access music catalogs, streams provider-authorized recordings, plays internet radio and your own music files, and lets independent artists open an account, publish their own recordings and have them streamed from your own server. No account, checkout, payment gateway or premium tier for listeners in OpenMic.
+A responsive, local-first, **MIT-licensed** music app that does two jobs:
 
-**Not a Spotify catalog unlock.** Third-party catalogs do not guarantee every new Bollywood, Punjabi, Hindi or international commercial song. Each track/station remains subject to its original provider's copyright, licensing, terms, browser format support and availability. Artist uploads are hosted by this app's own server — see **Artist uploads** below.
+1. **For listeners** — search four free-to-access music catalogs, play internet radio, import your own audio files, keep likes and playlists, all with no account, no checkout, no premium tier.
+2. **For independent artists** — open a profile, upload recordings you actually own, and have them streamed from *your own* server to everyone on the **Community** screen. YouTube's publishing model, Spotify's listening model, one dependency-free codebase.
 
-## Music sources (four open catalogs + artist uploads)
+![OpenMic home screen](./docs/assets/home-screen.svg)
 
-| Provider | What is available | Mode | API / license information |
-| --- | --- | --- | --- |
-| [Audius](https://docs.audius.co/api/) | Artist-uploaded tracks, newest and trending releases | On-demand, source-authorized stream | Public read API; not all uploads are freely streamable |
-| [Openverse](https://api.openverse.org/v1/) | Indexed Creative Commons and public-domain music/audio | Direct stream if original audio URL works | Anonymous rate-limited REST search; each result carries original attribution/license |
-| [Wikimedia Commons](https://www.mediawiki.org/wiki/API:Cross-site_requests) | Freely licensed/public-domain audio files | Direct streaming from Commons | MediaWiki CORS API; per-file license and credits on its file page |
-| [Radio Browser](https://api.radio-browser.info/) | Public internet radio station listings worldwide | **Live radio**, not seekable on-demand songs | Free/open-source station-directory API; each station's stream and rights remain separate |
-| **OpenMic artist uploads** | Recordings independent artists publish through **For artists** | On-demand, streamed from your own server at `/api/stream/<id>` | Upload is gated by a per-file rights warranty; each row links to the uploading artist's page |
+**What this is not.** It is not a Spotify catalog unlock. Third-party catalogs do not guarantee every new Bollywood, Punjabi, Hindi or international commercial song, and never will — those recordings are licensed to services that pay for them. Each track or station stays subject to its original provider's copyright, licence, terms, browser format support and availability. No scraping, no DRM bypass, no private or reversed API, no re-hosted commercial audio anywhere in this project. See [RESEARCH.md](./RESEARCH.md) for the clean-room notes on which *behaviours* were recreated and where the boundary sits.
 
-Each result shows the provider and source/credit link. **The app's MIT license covers app code, not externally hosted music.** Attribution and redistribution rules vary, and not all providers offer permission to download or reuse tracks. Listening to public radio doesn't give permission to record or redistribute broadcasts.
+---
 
-## Run locally (₹0 software charge)
+## Use cases
 
-Clone the repository, then start the OpenMic server:
+Six things a real person can do end to end today. Each was click-through verified in a browser, and the parts a headless test can reach are covered by the suite.
+
+| # | Who | Wants | Path in the app | Works today |
+| --- | --- | --- | --- | --- |
+| 1 | Listener, no account | Discover music without paying | **Free Music** → pick source → *New releases* / *Popular & radio* / search → play, like, add to playlist | Yes |
+| 2 | Independent artist | Publish my own songs | **For artists** → sign up → profile → upload file → accept rights warranty → publish | Yes |
+| 3 | Fan / A&R | Find artists by mood, not just by name | **Community** → describe a mood → *Ask the assistant* → search rewritten into catalog terms | Yes |
+| 4 | Crate digester / DJ | My files, radio and open catalogs in one library | Drag audio anywhere, or *Add audio files* → likes, playlists, queue, shuffle/repeat | Yes |
+| 5 | Rightsholder | Get an infringing upload removed | Flag the row (or the Community disclaimer) → complete the notice → file deleted, fingerprint denylisted, strike recorded | Yes |
+| 6 | Operator | Run this on my own box | `npm start` with `PORT` / `OPENMIC_HOST` / `OPENMIC_DMCA_EMAIL` → nothing else to provision | Yes |
+
+### 1 · A listener discovers music without a subscription
+
+Open **Free Music**, choose *All 4 sources* or one provider, and search. The four APIs are queried in parallel and **each source renders as it settles**, so a slow or rate-limited provider never blanks the page — its state shows in the status line instead. Every row carries its provider, a credit link, and the licence or attribution the provider reported. Radio rows are marked **LIVE** and disable seeking, because a live broadcast has no position to seek to.
+
+![Free Music screen and the four-source fan-out](./docs/assets/free-music-screen.svg)
+
+### 2 · An artist publishes their own recording
+
+Press **For artists**, create an email + password account and a public handle, then fill in the profile card. In *Publish a recording*: choose the file, add title, genre and tags, tick the rights warranty, publish. Nothing becomes public until the audio bytes have landed — a metadata-only row cannot be streamed. The track then appears in **Community** and on `/api/artists/<handle>`, credited to the artist, and renaming the profile re-credits the artist's published rows.
+
+The gates the server applies, whether or not the browser bothers to:
+
+- **Two-step upload** — `POST /api/tracks` for metadata, then `PUT /api/tracks/:id/audio` for raw bytes.
+- **Content is checked, not trusted** — extension and magic bytes must agree, MIME must be on the allowlist (mp3, m4a, aac, wav, ogg, opus, flac, webm), 25 MB per file, 200 MB and 60 tracks per profile, duplicate metadata+audio replays rejected.
+- **A per-upload warranty** (`openmic-rights-1`, served by `/api/meta`, so changing the wording invalidates previously accepted text): the artist states they own or licence the recording and that it contains no ripped, sampled or re-uploaded material they are not cleared to distribute.
+- **Playback by HTTP `Range`** — 206 partial bodies and 416 on bad ranges, so seeking a long file only moves the bytes the player asks for. The stream URL is built in the browser from the track id, so a response body can never point the player at another host.
+
+![Artist studio, upload warranty and assistant](./docs/assets/artist-studio-screen.svg)
+
+### 3 · A listener finds artists by mood, with AI
+
+On **Community**, type *"songs for a late night train ride"* and press *Ask the assistant*. The request goes to `POST /api/assistant` with `task: search`, comes back as catalog terms, and the list re-queries with them. In the studio the same endpoint drafts release titles from filenames, proposes genre/mood tags, drafts a bio, and — most usefully — flags rights problems before an artist publishes: samples, covers, "type beat" instrumentals, label deals, remixes, and audio pulled from a streaming link.
+
+![Community catalog with the mood helper and the notice form](./docs/assets/community-screen.svg)
+
+Two modes, one interface:
+
+- **Local rules (default).** `server/ai.mjs` answers all five tasks (`title`, `tags`, `bio`, `rights`, `search`) with no key, no network and no per-call cost. This is what runs on a fresh clone and in every test.
+- **Optional model proxy.** Set `OPENMIC_AI_KEY`, `OPENMIC_AI_MODEL` and `OPENMIC_AI_BASE_URL`. The server forwards a fenced, task-scoped prompt and parses JSON back out. The key never reaches the browser, the model sees only one artist's own draft text, and if the upstream is slow or fails the local rules answer instead with `degraded: true`.
+
+### 4 · Your own files, radio and open tracks in one library
+
+Drop audio anywhere in the window, or use *Add audio files*. Imported files live in browser **IndexedDB** and never upload anywhere; likes, playlists, saved links and stream metadata live in **localStorage** under `openmic:v1:*`. Track ids are namespaced (`demo:`, `local:`, `track:`, `playlist:`, `audius:`, `openverse:`, `commons:`, `radio:`, `community:<id>`) so a local file, a radio station and an artist upload can coexist in one queue. Pasting a Spotify link keeps using Spotify's official embeddable player under Spotify's own rules — OpenMic never touches that audio.
+
+### 5 · A rightsholder gets a recording taken down
+
+Anyone — anonymously — can flag a Community row or use the disclaimer link. A vague notice is rejected; a valid one must state the work, its location, contact details and a good-faith statement. On acceptance the recording is deleted immediately (metadata *and* audio file), its **SHA-256 fingerprint is denylisted** so it cannot come back through another account, the confirmation prints the agent address a counter-notice goes to, and the notice counts as a strike. **Two notices terminate the account**: remaining tracks are removed, sessions are dropped and the handle can no longer sign in. An artist deleting *their own* upload is not a strike and does not poison the fingerprint, so the same take can be re-uploaded.
+
+![Rights lifecycle: publish, listen, notice, removal, strike](./docs/assets/rights-lifecycle.svg)
+
+### 6 · An operator runs it
+
+One process, no dependencies, no database service:
 
 ```bash
-git clone https://github.com/humaniods/openmic.git
-cd openmic
+git clone https://github.com/humaniods/spotymusic.git
+cd spotymusic
 npm start          # node server/server.mjs → http://localhost:5173
 ```
 
-`npm start` runs the dependency-free Node server (no `npm install` needed; Node 20+). It serves the app with correct cache headers, streams artist uploads, and answers `/api/*`. Artist uploads and account records are written to `./data/`, which is git-ignored.
+Accounts, track metadata and audio are written to `./data/` (git-ignored, directory `0700`, `db.json` `0600`, serialized tmp+rename writes). The server binds `127.0.0.1` by default; set `OPENMIC_HOST=0.0.0.0` only behind a proxy you control. Set `OPENMIC_DMCA_EMAIL` to a real address before publishing anywhere public — it is printed on every takedown confirmation and on the community disclaimer.
 
-The static player also runs on any plain file server (`npm run static`), in which case Free Music, local files and Spotify embeds keep working and the artist screens show "No OpenMic server is answering".
+---
 
-To run tests: `npm test` (58 tests, no network access — the server tests boot a real instance on an ephemeral port with a temporary data directory).
+## Music sources (four open catalogs + artist uploads)
 
-Click **Free Music** → select **All 4 sources** or a particular provider → choose **New releases**, **Popular & radio**, or search for a song/artist/station. Click any streamable result to play, like, or add it to a playlist. Radio is live: seeking/duration are disabled. Import your own audio on the Home/Library screens.
+| Provider | What is available | Mode | API / licence information |
+| --- | --- | --- | --- |
+| [Audius](https://docs.audius.co/api/) | Artist-uploaded tracks, newest and trending | On-demand, source-authorized stream | Public read API; not all uploads are freely streamable |
+| [Openverse](https://api.openverse.org/v1/) | Indexed Creative Commons and public-domain audio | Direct stream if the original URL works | Anonymous rate-limited REST search; each result carries its own attribution |
+| [Wikimedia Commons](https://www.mediawiki.org/wiki/API:Cross-site_requests) | Freely licensed / public-domain files | Direct streaming from Commons | MediaWiki CORS API; per-file licence on its file page |
+| [Radio Browser](https://api.radio-browser.info/) | Public internet radio listings worldwide | **Live radio**, not seekable on-demand songs | Free/open station directory; each station's stream and rights are separate |
+| **OpenMic artist uploads** | Recordings published through **For artists** | On-demand, from your own server at `/api/stream/<id>` | Gated by a per-file rights warranty; every row links to the uploading artist |
 
-### Important behavior
+**The app's MIT licence covers app code, not externally hosted music.** Attribution and redistribution rules vary by provider, and not all of them permit downloading or reusing a track. Listening to a public broadcast does not give anyone permission to record or redistribute it.
 
-- Audius has a real latest-upload catalog. Openverse's "new" sorting means **recently indexed**, not necessarily released today. Commons and radio discovery are searches/top-ranked stations and not a chronological release calendar.
-- On free-source search, each API runs separately; if one source is down or rate-limited, the others still display. Errors appear under the search filters.
-- Some returned audio URLs may fail due to unsupported codecs, provider hotlinking policies, browser CORS, region rules or removed files. The player shows an error instead of promising universal playback.
-- No paid subscriptions or keys are embedded. Spotify URLs still use Spotify's official embeddable player and its own rules.
-- Existing local MP3/WAV/etc. imports and Spotify embeds continue to work, as do playlists and likes.
+## Architecture
 
-### Artist uploads (For artists)
+![Architecture: browser modules, server routes, outside world](./docs/assets/architecture.svg)
 
-Listeners still need no account. An artist who wants to publish presses **For artists**, creates an email + password account and a public handle, then uploads audio files they have the rights to. Those recordings are hosted by this server and appear in **Community** for everyone.
+## Limitations we filled
 
-- **Passwords** are salted `scrypt` hashes (N=16384) — never stored or logged in clear text. **Sessions** are random tokens sent as an `HttpOnly`, `SameSite=Lax` cookie; only their SHA-256 digest is stored, so a data-file leak cannot revive a login.
-- **Uploads** are two calls: metadata first, then the raw bytes (`PUT /api/tracks/<id>/audio`). Nothing is published until the audio lands, and a pending upload cannot be streamed.
-- **Content is checked, not trusted**: extension plus magic bytes must agree, MIME is allowlisted, per-file/per-user byte quotas and a per-user track count are enforced, and duplicate metadata+audio replays are rejected.
-- **A rights warranty is required per upload** (`openmic-rights-1`): the artist states they own or licence the recording and that it contains no ripped, sampled or re-uploaded material they are not cleared to distribute. The text is served by `/api/meta`, so changing it invalidates previously accepted wording.
-- **Playback** uses HTTP `Range` requests, so seeking works on long files and only the needed bytes cross the wire. The stream URL is built in the browser from the track id — a response body can never point the player at another host.
-- **Public artist pages** (`/api/artists/<handle>`) expose name, handle, bio and published tracks. Email and password data are never returned.
+The catalog problem cannot be solved honestly by an app this size. Nearly everything else on this list could be, and was — these were real defects found while clicking through every screen and reading the code behind them. Each is fixed; where a headless test can reach the behaviour, it now has one, and the hashes point at the commit that closed it.
 
-### Artist assistant (AI support)
+| Gap that existed | What it looked like | What it is now |
+| --- | --- | --- |
+| No publishing path at all | Artists could listen, never upload | Accounts, profiles, two-step uploads, Range streaming, public artist pages — `7483c52` |
+| Free-API search returned almost nothing | Searching an artist or song name showed empty lists | Openverse rebuilt against `/v1/`, Commons audio-type and noise filtering, per-source settle — `bfab3f8` |
+| One slow source blocked every source | Whole page waited on the worst API | Each provider renders independently; failures report per source |
+| Rate limits failed silently | A 429 looked like "no results" | Retry with backoff, and a visible status line |
+| Saved free tracks vanished from search | A bookmarked Audius track was unfindable later | Saved rows are revived and stay searchable; duration clocked correctly — `cf3d092` |
+| Library pollution and a runaway queue | One play could enqueue hundreds of rows | Explicit saves, bounded queue, namespaced ids |
+| No delete actions; duplicate uploads accepted | Junk rows you could not remove; same file twice | Row-level delete for local and own uploads, duplicate fingerprint/metadata rejected |
+| Ghost rows after a takedown | A removed upload stayed in likes and playlists and threw on play | Play failure probes the stream; a 404/410 forgets the row everywhere — `d066139` |
+| Audius attribution could be redirected | A crafted `permalink` could point the credit link off-audius.co | Permalink shape validated, saved pages pinned to `https://audius.co` |
+| Renaming a profile left stale credits | Published rows kept crediting an abandoned name | `PATCH /api/profile` re-credits that artist's tracks |
+| Assistant missed remixes | "A remix of a Bollywood song" raised no flag | Remix rule added alongside sample, cover, type-beat, label and streaming-link rules |
+| Stale app after every deploy | `python3 -m http.server` sent no `Cache-Control`, so browsers kept running an old `app.mjs` | `no-cache` + ETag for app files, `immutable` for audio — `server/static.mjs` |
+| Server errors shown twice-escaped | `&amp;quot;` in the UI | Single-escape path fixed — `7b96fde` |
+| Account store world-readable | `db.json` with password hashes in a shared worktree | Directory `0700`, file `0600`, git-ignored, `data/` never committed |
+| Most of one stylesheet was dead | One unterminated `.row-remove` rule made the browser nest the rest of `styles.css` inside it, so the row grid, `.danger`, `.playlist-options` and `.row-remove` never applied | Repaired while theming — `32c25f7` |
 
-The **Studio** assistant drafts release titles from filenames, proposes genre/mood tags, drafts a short artist bio and — most importantly — flags rights problems before publishing (samples, covers, "type beat" stock, label deals, audio taken from a streaming link). Listeners get a smaller "describe a mood" search helper on the **Community** screen.
+## Limitations we are not going to fill
 
-Two modes, same interface:
+Stated plainly, because the interesting part of this project is where it stops.
 
-- **Local rules (default).** `server/ai.mjs` answers every task with no key, no network and no per-call cost. This is what runs in tests and on a fresh clone.
-- **Optional model proxy.** Set `OPENMIC_AI_KEY`, `OPENMIC_AI_MODEL` and `OPENMIC_AI_BASE_URL`; the server forwards a fenced, task-scoped prompt and parses JSON back out. The key never reaches the browser, the model only ever sees the artist's own draft text plus the warranty wording, and if the upstream is slow or fails the local rules answer instead (`degraded: true` is shown).
+**Legal and catalog**
+- **No commercial catalog.** No Bollywood/Punjabi/Hindi/Western blockbusters on release day. Open catalogs hold open music; that is the ceiling, and no amount of code changes it without breaking the law.
+- **No DRM removal, no private or reversed APIs, no scraping, no re-hosting of streams.** Spotify playback means Spotify's official embed, full stop.
+- **No composition licensing.** OpenMic does not obtain mechanical licences (US MLC) and does not implement EU Art. 17 upload filtering. Covers need the artist's own licence — which is exactly what the warranty and the assistant's cover/sample/remix warnings exist to say.
+- **`OPENMIC_DMCA_EMAIL` ships as `dmca@openmic.invalid`.** A placeholder is not a designated agent. Fix it before going public.
 
-### Rights, takedown and repeat infringers
+**Technical**
+- **Codec support is the browser's,** not ours: no server-side transcoding, so a valid-but-unplayable file stays unplayable.
+- **Live radio cannot be seeked,** has no duration, and can drop at any time.
+- **Search is substring matching** across title, artist, handle, genre and tags — not fuzzy, not semantic, no embeddings, no recommendations engine, no follow feed.
+- **Single-node JSON store.** No scale-out, no replicas, no backup tooling, and rate-limit counters live in that one process. Fine for a personal or community instance; not built for traffic.
+- **No password reset, no email verification, no OAuth, no 2FA** — deliberately, since all four need an email or identity provider, which would break the zero-dependency promise. Losing a password means making a new account.
+- **No admin dashboard.** Takedowns are enforced by the API and the file store; whoever runs an instance reads the confirmations.
+- **No message is pushed to the uploader.** Email delivery would need a provider, which breaks the zero-dependency promise, so an artist discovers a takedown when their row disappears and reads the counter-notice address on the filer's confirmation. Notices *are* recorded server-side with target, contact text, handle and agent address.
+- **No lyrics, no collaborative playlist editing, no shareable playlist links, no playback analytics or scrobbling.** Public pages exist for artists (`/api/artists/<handle>`), not for playlists.
+- **The assistant is rules-first.** Without a configured model it pattern-matches text; it is a good prompt to make someone notice a rights problem, not a legal opinion.
 
-An app that hosts user audio needs the safe-harbour mechanics, and OpenMic ships them:
+## Security model in one paragraph
 
-- Anyone can file a notice from a track's flag button or the **Community** disclaimer (`POST /api/takedown`, anonymous allowed). A sloppy notice is rejected; a valid one must state the work, the URL, contact details and a good-faith statement.
-- The recording is deleted immediately (metadata and audio file), its **SHA-256 fingerprint is denylisted** so it cannot be re-uploaded by another account, and the uploader is notified with the agent's address for a counter-notice.
-- **Two notices terminate the account**: their remaining tracks are removed and the handle can no longer log in.
-- An artist deleting their *own* upload is not a strike and does not poison the fingerprint — the same file may be re-uploaded.
-- Set `OPENMIC_DMCA_EMAIL` to a real address before publishing anywhere public; it is printed on every takedown confirmation and on the community disclaimer.
+Salted `scrypt` (N=16384) password hashes, never logged in clear text. Sessions are random tokens in an `HttpOnly`, `SameSite=Lax` cookie of which only the SHA-256 digest is stored, so a leaked data file cannot revive a login. Writes require the `x-openmic-request: 1` marker (CSRF). Per-IP limits: signup 10/hr, login 8 per 15 min, takedown 10/hr, assistant 60/min signed-in and 20/min anonymous. Static serving is path-jailed to the project root. Email is never returned by any route except `/api/session` to its own owner.
 
-Composing-side royalties are deliberately **out of scope**: OpenMic does not obtain mechanical licences (MLC in the US) or sign up for EU Art. 17 filtering. Covers therefore need the artist's own licence, which is exactly what the warranty and the assistant's cover warning exist to say.
+## Tests
 
-### Configuration
+```bash
+npm test           # 60 tests, no network access
+```
+
+`node --test tests/*.test.mjs` over six files: `core` (state, storage, queue), `providers` (adapters, filtering, backoff), `audius` (catalog, stream URLs, attribution safety), `community` (browser client, id normalisation), `demo-audio` (WAV fixture validity), `server` (boots the real server on an ephemeral port with a temporary data dir and drives every route, including uploads, Range reads, takedowns, strikes and the assistant). CI runs `node --check` across every module plus this suite on each push.
+
+## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `5173` | Listen port |
-| `OPENMIC_HOST` | `127.0.0.1` | Bind address; set `0.0.0.0` only behind a proxy you control |
-| `OPENMIC_DMCA_EMAIL` | `dmca@openmic.invalid` | Designated agent contact |
+| `OPENMIC_HOST` | `127.0.0.1` | Bind address; `0.0.0.0` only behind your own proxy |
+| `OPENMIC_DMCA_EMAIL` | `dmca@openmic.invalid` | Designated-agent contact shown on notices |
 | `OPENMIC_DATA_DIR` | `./data` | Account store + uploaded audio (git-ignored) |
-| `OPENMIC_AI_KEY` / `OPENMIC_AI_MODEL` / `OPENMIC_AI_BASE_URL` | unset | Optional model proxy for the assistant |
+| `OPENMIC_AI_KEY` / `_MODEL` / `_BASE_URL` | unset | Optional model proxy for the assistant |
 
-### Privacy and persistence
+The static player also runs on any plain file server (`npm run static`): Free Music, local files and Spotify embeds keep working, and the artist screens report "No OpenMic server is answering".
 
-Imported local songs stay in browser IndexedDB; saved favorites, playlists and link/stream metadata stay in browser localStorage. Free-source streams play from the upstream providers (who receive ordinary requests). Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`; nothing is sent to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment information collection.
+## Privacy
 
-### Development
+Imported local songs stay in browser IndexedDB. Favorites, playlists, saved links and stream metadata stay in browser localStorage. Free-source streams are fetched from the upstream providers, who receive ordinary requests from you. Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`. Nothing goes to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment collection, no ads.
 
-- `src/audius.mjs` — Audius search and stream URLs
-- `src/providers.mjs` — Openverse, Wikimedia Commons, Radio Browser adapters + multi-source aggregator
-- `src/free-catalog.mjs` — source selector, search, listings and pagination
-- `src/app.mjs` — player, queues, local files, favorites and playlists
-- `src/community-api.mjs` — browser client for the artist API, incl. track normalisation and stream-URL construction
-- `src/artist.mjs` / `src/artist.css` — artist studio, community catalog, takedown dialog
-- `src/dialogs.mjs` — shared confirm dialog promise used by both modules
-- `server/server.mjs` — `node:http` entry point and static/API dispatch
-- `server/api.mjs` — accounts, uploads, streaming, takedowns, assistant routes
-- `server/users.mjs`, `server/store.mjs`, `server/static.mjs`, `server/ai.mjs` — credentials, JSON store, cache-correct file serving, assistant rules
+## Code map
+
+- `src/app.mjs` — player, queues, local files, favorites, playlists, play-failure handling
+- `src/core.mjs` / `src/dialogs.mjs` — state and storage helpers, shared confirm dialog
+- `src/free-catalog.mjs` / `src/providers.mjs` / `src/audius.mjs` — source selector, multi-source aggregation, adapters
+- `src/community-api.mjs` / `src/artist.mjs` — artist client and screens, community catalog, takedown dialog
+- `src/demo-audio.mjs` — synthesises structurally valid WAV fixtures
+- `src/styles.css` / `src/artist.css` / `src/free-music.css` — glass theme tokens and per-screen layers
+- `server/server.mjs` — `node:http` entry, static + API dispatch
+- `server/api.mjs` — accounts, uploads, streaming, takedowns, assistant routes, limits
+- `server/users.mjs` / `server/store.mjs` / `server/static.mjs` / `server/ai.mjs` — credentials, JSON store, cache-correct serving, assistant rules
 - `tests/*.test.mjs` — deterministic fixtures; `tests/server.test.mjs` boots the real server
+- `docs/assets/*.svg` — the diagrams on this page, drawn from the real DOM and route structure
 
-This application is independent of Spotify, Openverse, Audius, Wikimedia and Radio Browser and is not endorsed by those services. No scraping, DRM bypass, copyrighted catalog rehosting, premium-feature circumvention or licence-free cover distribution is part of this project. Artist uploads are published by the artists themselves under a rights warranty, and OpenMic removes them on a valid notice.
+OpenMic is independent of Spotify, Openverse, Audius, Wikimedia and Radio Browser and is not endorsed by them. Application source is MIT; media reached through the app carries its own copyright and licence.
 
 ## License
 
-[MIT](./LICENSE) for original application source code. Media accessed through the app carries its own copyright and license terms.
+[MIT](./LICENSE) for original application source code. Music accessed through the app does not.
