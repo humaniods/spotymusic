@@ -260,6 +260,24 @@ test('public artist pages never expose the account email', async () => {
   } finally { await app.close(); }
 });
 
+test('renaming an artist renames the credit on their published tracks', async () => {
+  const app = await start();
+  try {
+    const cookie = await signedUp(app.base);
+    const created = await call(app.base, '/api/tracks', {
+      method: 'POST', cookie, body: { title: 'First Press', rightsConfirmed: true, warrantyVersion: WARRANTY_VERSION },
+    });
+    await call(app.base, '/api/tracks/' + created.value.track.id + '/audio', { method: 'PUT', cookie, body: MP3 });
+    assert.equal((await call(app.base, '/api/artists/ari-sound')).value.tracks[0].artist, 'Ari');
+    const renamed = await call(app.base, '/api/profile', { method: 'PATCH', cookie, body: { name: 'Ari Waves' } });
+    assert.equal(renamed.value.user.name, 'Ari Waves');
+    const listed = await call(app.base, '/api/tracks?query=First');
+    assert.equal(listed.value.tracks[0].artist, 'Ari Waves', 'the community list shows the current name');
+    assert.equal((await call(app.base, '/api/artists/ari-sound')).value.tracks[0].artist, 'Ari Waves');
+    assert.equal((await call(app.base, '/api/session', { cookie })).value.tracks[0].artist, 'Ari Waves');
+  } finally { await app.close(); }
+});
+
 test('deleting your own upload leaves it open for re-upload', async () => {
   const app = await start();
   try {
@@ -290,6 +308,12 @@ test('the assistant answers with no model configured and uses the proxy when the
     assert.ok(tags.value.suggestions.includes('electronic') || tags.value.suggestions.includes('energy'));
     const rights = await call(local.base, '/api/assistant', { method: 'POST', body: { task: 'rights', input: 'sampled from a Bollywood track' } });
     assert.equal(rights.status, 401, 'artist-side help needs an account');
+    const remix = await call(local.base, '/api/assistant', {
+      method: 'POST', cookie: await signedUp(local.base, { email: 'remix@example.com', handle: 'remix-check' }),
+      body: { task: 'rights', input: 'a remix of a Bollywood song' },
+    });
+    assert.equal(remix.status, 200);
+    assert.ok(remix.value.suggestions.some(line => /remix/i.test(line)), JSON.stringify(remix.value.suggestions));
     const search = await call(local.base, '/api/assistant', { method: 'POST', body: { task: 'search', input: 'songs for late night coding' } });
     assert.equal(search.status, 200);
     assert.ok(search.value.query.includes('coding'), search.value.query);

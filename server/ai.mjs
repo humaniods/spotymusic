@@ -106,6 +106,10 @@ export function rightsCheck(input) {
     flags.push('This sounds like a cover: the underlying composition still belongs to its writer. A mechanical license (in India, collecting societies) covers it; uploading an unlicensed cover does not.');
   if (/karaoke|instrumental of|type beat/.test(text))
     flags.push('Karaoke and "type beat" instrumentals usually reuse someone else\'s composition. Confirm you wrote it or licensed it.');
+  // "remix" is the wording people actually use when they mean a bootleg of someone
+  // else's record, and the sample/cover/flip rules above all missed it.
+  if (/\bremix(?:es|ed|ing)?\b/.test(text))
+    flags.push('A remix needs the original owner\'s permission, usually from the label that holds the stems. Only remixes of your own recordings, or ones you are cleared for, are safe to publish.');
   if (/label|distributed by|signed to/.test(text))
     flags.push('A label deal may already assign these rights. Check your contract before publishing here.');
   if (/(?:spotify|apple music|youtube)\s*(?:link|url|from)/.test(text))

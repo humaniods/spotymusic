@@ -375,6 +375,11 @@ export function createApi({ store, audioDir, agentEmail = 'dmca@openmic.invalid'
         const record = data.users[user.id];
         if (body.name !== undefined) record.name = clipText(body.name, 60) || record.name;
         if (body.bio !== undefined) record.bio = clipText(body.bio, 500);
+        // Each upload remembers the display name it was published under, so without this a
+        // rename would leave the Community list crediting an artist by a name they dropped.
+        for (const track of Object.values(data.tracks)) {
+          if (track.userId === user.id) track.artist = record.name;
+        }
         return record;
       });
       return json(res, 200, { user: profile(updated) });

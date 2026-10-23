@@ -191,7 +191,8 @@ export async function fetchProvider(provider, options={}, fetchImpl=fetch) {
   const get = url => withRetry(()=>getJSON(url,fetchImpl,budget), budget);
   if (provider==='audius') {
     const items = await withRetry(()=>fetchFreeTracks({mode,query,offset,limit,signal:budget},fetchImpl), budget);
-    return items.map(t=>({...t,provider:'audius',page:'https://audius.co',license:'Artist-provided stream',live:false}));
+    // toFreeTrack now carries the artist's own permalink, so keep it when present.
+    return items.map(t=>({...t,provider:'audius',page:t.page || 'https://audius.co',license:'Artist-provided stream',live:false}));
   }
   if (provider==='openverse') {
     const data = await get(openverseUrl({mode,query,offset,limit}));

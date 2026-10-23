@@ -208,11 +208,36 @@ async function removeItem(id){
   persist();renderPage();updateFooter();
   toast(item.kind==='local'?'Audio file deleted':'Spotify link removed');
 }
+// A liked artist upload can be taken down while the listener is away. The media element
+// only says "load failed", so ask our own server whether it is gone for good instead of
+// inviting the user to press Play again on a permanent 404.
+async function reportPlayFailure(item,error){
+  if(error?.name==='NotAllowedError')return toast('The browser blocked autoplay. Press Play to start.');
+  if(item.kind==='community'&&item.source){
+    try {
+      const probe=await fetch(item.source,{method:'HEAD',credentials:'same-origin'});
+      if(probe.status===404||probe.status===410){
+        forgetTrack(item.id);
+        return toast('That upload was removed from OpenMic, so it is off your list too.');
+      }
+    } catch { /* no answer: fall through to the generic wording */ }
+  }
+  toast('This stream is offline or unsupported in this browser. Try another track or station.');
+}
+// Drop an id everywhere the listener could still reach it.
+function forgetTrack(id){
+  state.liked.delete(id);
+  for(const playlist of state.playlists)playlist.ids=playlist.ids.filter(x=>x!==id);
+  state.online=state.online.filter(t=>t.id!==id);
+  state.queue=state.queue.filter(x=>x!==id);
+  if(state.current?.id===id){state.current=null;releaseAudio();clearSpotifyFrame();}
+  persist();renderPage();updateFooter();
+}
 async function playItem(id, queueIds){const item=getItem(id);if(!item)return toast('Track not found');if(Array.isArray(queueIds)){state.queue=queueIds.filter(x=>getItem(x));state.queueIndex=Math.max(0,state.queue.indexOf(id));}else if(!state.queue.includes(id)){state.queue=allItems().filter(t=>t.kind!=='spotify').map(t=>t.id);if(!state.queue.includes(id))state.queue=[id,...state.queue];state.queueIndex=state.queue.indexOf(id);}else state.queueIndex=state.queue.indexOf(id);
   if(state.current?.id===id&&item.kind!=='spotify'){if(audio.paused){try{await audio.play();}catch{toast('Could not play this audio file');}}else audio.pause();updateFooter();return;}
   state.current=item;
   if(item.kind==='spotify'){releaseAudio();enableSpotifyFrame(item);toast('Official Spotify player opened');}
-  else{clearSpotifyFrame();releaseAudio();const source=item.kind==='demo'?demoSource(item):(item.source||state.objectUrls.get(item.id));if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();}catch(error){toast('Playback blocked or unsupported audio. Press Play again.');}}
+  else{clearSpotifyFrame();releaseAudio();const source=item.kind==='demo'?demoSource(item):(item.source||state.objectUrls.get(item.id));if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();}catch(error){await reportPlayFailure(item,error);}}
   updateFooter();renderPage();
 }
 function step(direction){if(!state.queue.length)return;let index;if(direction===-1){index=state.queueIndex>0?state.queueIndex-1:state.repeat==='all'?state.queue.length-1:-1;}else{index=nextIndex(state.queueIndex,state.queue.length,{repeat:state.repeat,shuffle:state.shuffle});}if(index<0){audio.pause();audio.currentTime=0;updateFooter();return;}state.queueIndex=index;playItem(state.queue[index],state.queue);}
@@ -232,13 +257,7 @@ function events(){
   // to go too - otherwise Liked Songs keeps a row that 404s forever.
   window.addEventListener('openmic:forget', event => {
     const id = String(event.detail || '');
-    if (!id) return;
-    state.liked.delete(id);
-    for (const playlist of state.playlists) playlist.ids = playlist.ids.filter(x => x !== id);
-    state.online = state.online.filter(t => t.id !== id);
-    state.queue = state.queue.filter(x => x !== id);
-    if (state.current?.id === id) { state.current = null; releaseAudio(); clearSpotifyFrame(); }
-    persist(); renderPage(); updateFooter();
+    if (id) forgetTrack(id);
   });
   window.addEventListener('openmic:register-online', event => {
     if (!Array.isArray(event.detail)) return;
