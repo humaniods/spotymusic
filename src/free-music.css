@@ -42,3 +42,13 @@
   .free-source-select label,.free-source-select select {flex:1 0 100%;width:100%}
   .free-source-credit {font-size:9px}
 }
+
+/* Glass theme for the free-catalog screen. This lives at the end of the file on purpose:
+   styles.css loads before this one, and the original opaque field fills above are equal in
+   specificity, so the overrides only win when they come last. */
+.free-search-row input, .free-source-select select { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)), rgba(10,14,15,.52); border: 1px solid var(--glass-edge-soft); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); color: #f6f8f6 }
+.free-search-row input:focus, .free-source-select select:focus { border-color: var(--green) }
+.free-filters button { background: rgba(255,255,255,.05); border: 1px solid var(--glass-edge-soft); color: #d7e2d8 }
+.free-filters button.active { background: var(--green); border-color: var(--green); color: #172519 }
+.free-nav-tag { background: rgba(182,255,82,.16); color: #d6ffa6; border: 1px solid rgba(182,255,82,.24) }
+.free-disclaimer { border-top: 1px solid rgba(255,255,255,.1) }

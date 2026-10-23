@@ -22,6 +22,15 @@ const station = {
   url_resolved:'https://radio.example.org/jazz.mp3',homepage:'https://radio.example.org',
   codec:'MP3',lastcheckok:1,countrycode:'IN',hls:0,tags:'jazz,blues'
 };
+// Live Openverse payloads are overwhelmingly Jamendo, which labels bitrates rather
+// than formats. An exact-match check on these silently dropped every single result.
+const jamendoRecord = {
+  id:'8457fac8-84be-48b9-9b57-143ec5e5fbd9',title:'latino-jazz-cash',
+  creator:'Les Oreilles en Ballades',
+  url:'https://prod-1.storage.jamendo.com/?trackid=15767&format=mp32',
+  foreign_landing_url:'https://www.jamendo.com/track/15767',
+  license:'by-nc-nd',license_version:'2.5',filetype:'mp32'
+};
 
 test('four source choices are explicit and independent',()=>{
   assert.deepEqual(Object.keys(SOURCES),['audius','openverse','commons','radio']);
@@ -94,4 +103,110 @@ test('saved tracks reject fabricated provider IDs and executable URLs',()=>{
 test('Unsupported provider is rejected and provider fetch responses validated',async()=>{
   await assert.rejects(searchAcross({provider:'anything'}),/Unknown source/);
   await assert.rejects(fetchProvider('openverse',{mode:'search',query:'piano'},async()=>({ok:true,json:async()=>({results:'bad'})})),/Unexpected Openverse/);
+});
+
+test('Openverse maps Jamendo bitrate-suffixed filetypes instead of dropping them',()=>{
+  const t=mapOpenverse(jamendoRecord);
+  assert.equal(t?.kind,'openverse');
+  assert.equal(t?.title,'latino-jazz-cash');
+  assert.match(t?.source,/prod-1\.storage\.jamendo\.com/);
+  assert.equal(mapOpenverse({...jamendoRecord,filetype:'ogg3'}).kind,'openverse');
+  assert.equal(mapOpenverse({...jamendoRecord,filetype:'html'}),null);
+  assert.equal(mapOpenverse({...jamendoRecord,filetype:'pdf'}),null);
+});
+
+test('Commons rejects Wikipedia pronunciation and spoken-article recordings',()=>{
+  // Real "coldplay" search hits that were drowning out actual music.
+  for(const junk of ['File:En-us-starfish.ogg','File:Nl-Coldplay-article.ogg',
+                     'File:LL-Q1860 (eng)-Vealhurl-coldplay.wav','File:Ru-Korean War.ogg']){
+    assert.equal(mapCommons({...commonsRecord,title:junk},'coldplay'),null,junk);
+  }
+  const kept=mapCommons({...commonsRecord,title:'File:Coldplay_Live_Concert.ogg'},'coldplay');
+  assert.equal(kept?.title,'Coldplay Live Concert');
+  assert.equal(mapCommons({...commonsRecord,title:'File:Jazz_at_the_park.ogg'},'coldplay'),null);
+  // Generic terms must not gate matching or every query would need a title hit.
+  assert.ok(mapCommons(commonsRecord,'music'));
+  assert.ok(mapCommons(commonsRecord,''));
+});
+
+test('sources report independently as they settle, not as a batch',async()=>{
+  const order=[];
+  const mocked=async url=>{
+    if(url.includes('api.audius.co')) {await new Promise(r=>setTimeout(r,60));
+      return {ok:true,json:async()=>({data:[{id:'abcd1234efgh',title:'Slow but first',user:{name:'A'}}]})};}
+    if(url.includes('api.openverse.org')) return {ok:true,json:async()=>({results:[openRecord]})};
+    if(url.includes('commons.wikimedia.org')) return {ok:false,status:500,json:async()=>({})};
+    return {ok:true,json:async()=>[station]};
+  };
+  const data=await searchAcross({provider:'all',mode:'search',query:'jazz',
+    onSource:({provider,tracks,error})=>order.push(provider+(error?'!':'+'+tracks.length))},mocked);
+  assert.equal(order.length,4);
+  assert.equal(new Set(order.map(x=>x.split(/[!+]/)[0])).size,4,'each source reports once');
+  assert.ok(order.includes('commons!'),order.join(','));
+  assert.ok(order[3].startsWith('audius'),order.join(','));
+  // the aggregate stays in declared source order regardless of who answered first
+  assert.deepEqual(data.tracks.map(t=>t.provider),['audius','openverse','radio']);
+  assert.deepEqual(data.errors.map(e=>e.provider),['commons']);
+});
+
+test('internal addresses cannot become an audio source',()=>{
+  for(const host of ['[::1]','[::ffff:7f00:1]','[fd00::1]','[fe80::1%25eth0]','localhost.','db.internal',
+                     'x.corp','127.0.0.1','10.1.2.3','192.168.4.4','172.16.9.9','169.254.169.254',
+                     '2130706433','0x7f000001','127.1','0.0.0.0']){
+    assert.equal(mapOpenverse({...openRecord,url:'https://'+host+'/a.mp3'}),null,host);
+  }
+  for(const host of ['[2606:4700:0::1]','cdn.example.org','172.15.0.1','8.8.8.8']){
+    assert.ok(mapOpenverse({...openRecord,url:'https://'+host+'/a.mp3'}),host);
+  }
+});
+
+test('throttled providers are retried before giving up',async()=>{
+  let calls=0;
+  const flaky=async()=>{
+    calls++;
+    return calls<3 ? {ok:false,status:429,json:async()=>({})}
+                   : {ok:true,json:async()=>({results:[jamendoRecord]})};
+  };
+  const tracks=await fetchProvider('openverse',{mode:'search',query:'piano'},flaky);
+  assert.equal(calls,3);
+  assert.equal(tracks.length,1);
+});
+
+test('non-throttled failures surface immediately without retry',async()=>{
+  let calls=0;
+  const failing=async()=>{calls++;return {ok:false,status:500,json:async()=>({})};};
+  await assert.rejects(fetchProvider('openverse',{mode:'search',query:'piano'},failing),/HTTP 500/);
+  assert.equal(calls,1);
+});
+
+// Browser network failures reject with TypeError, so they look retryable. Without a
+// per-provider budget a single dead mirror retried across all three for ~90s and the
+// Browse screen never resolved.
+test('network failures retry a bounded number of times then surface',async()=>{
+  let calls=0;
+  const dead=async()=>{calls++;throw new TypeError('Failed to fetch');};
+  await assert.rejects(fetchProvider('commons',{mode:'search',query:'piano'},dead),/Failed to fetch/);
+  assert.equal(calls,3);
+});
+
+test('a cancelled search abandons a hung provider without retrying',async()=>{
+  const controller=new AbortController();
+  let calls=0;
+  const hanging=()=>{
+    calls++;
+    return new Promise((_,reject)=>controller.signal.addEventListener('abort',
+      ()=>reject(new DOMException('Aborted','AbortError')),{once:true}));
+  };
+  setTimeout(()=>controller.abort(),120);
+  await assert.rejects(fetchProvider('openverse',{mode:'search',query:'piano',signal:controller.signal},hanging),/Aborted/);
+  assert.equal(calls,1);
+});
+
+// Real payload for a Commons search with no hits: batchcomplete is present but empty.
+test('an empty Wikimedia result is not reported as a broken source',async()=>{
+  const empty=async()=>({ok:true,json:async()=>({batchcomplete:''})});
+  assert.deepEqual(await fetchProvider('commons',{mode:'search',query:'arijit singh official album'},empty),[]);
+  const failed=async()=>({ok:true,json:async()=>({batchcomplete:'',error:{info:'The search query is too long'}})});
+  await assert.rejects(fetchProvider('commons',{mode:'search',query:'x'},failed),/search query is too long/);
+  await assert.rejects(fetchProvider('commons',{mode:'search',query:'x'},async()=>({ok:true,json:async()=>'not json'})),/Unexpected Wikimedia/);
 });

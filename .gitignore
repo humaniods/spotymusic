@@ -6,3 +6,6 @@ node_modules/
 !.env.example
 .vscode/
 .idea/
+
+# artist uploads and the account store - never commit these
+data/

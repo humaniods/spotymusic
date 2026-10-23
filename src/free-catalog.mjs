@@ -28,7 +28,8 @@ function renderRow(track) {
       '<a class="free-source-credit" href="'+page+'" target="_blank" rel="noopener noreferrer" title="Original source and attribution">'+source+' · '+license+' ↗</a></div>' +
     '<div class="track-kind">'+label+'</div>' +
     '<button class="icon-button row-like" data-action="like" data-id="'+id+'" title="Like" aria-label="Like '+title+'"><svg><use href="#i-heart"/></svg></button>' +
-    '<button class="icon-button row-add" data-action="add" data-id="'+id+'" title="Add to playlist" aria-label="Add '+title+' to playlist"><svg><use href="#i-plus"/></svg></button></div>';
+    '<button class="icon-button row-add" data-action="add" data-id="'+id+'" title="Add to playlist" aria-label="Add '+title+' to playlist"><svg><use href="#i-plus"/></svg></button>' +
+    '<span class="row-slot" aria-hidden="true"></span></div>';
 }
 function updateFilter() {
   for(const button of filters) {
@@ -47,22 +48,40 @@ async function load(reset=false) {
   controller=new AbortController();
   const request=++serial;
   busy=true;
+  let pending = provider==='all' ? Object.keys(SOURCES) : [provider];
+  const failed=[];
   if(reset) {offset=0;displayed.clear();results.replaceChildren();}
   more.disabled=true;
   more.hidden=true;
+  const summary=()=>{
+    const who=provider==='all'?'All free sources':SOURCES[provider];
+    const parts=[displayed.size?displayed.size+' listings found':'No streamable results found',who];
+    if(pending.length) parts.push('waiting on '+pending.map(p=>SOURCES[p]).join(', '));
+    if(failed.length) parts.push(failed.map(p=>SOURCES[p]+' unavailable').join(', '));
+    return parts.join(' · ');
+  };
+  const paint=tracks=>{
+    const fresh=tracks.filter(t=>!displayed.has(t.id));
+    if(!fresh.length) return;
+    fresh.forEach(t=>displayed.add(t.id));
+    window.dispatchEvent(new CustomEvent('openmic:register-online',{detail:fresh}));
+    results.insertAdjacentHTML('beforeend',fresh.map(renderRow).join(''));
+    status.textContent=summary();
+  };
   status.textContent='Searching '+(provider==='all'?'all four free sources':SOURCES[provider])+' for '+heading()+'…';
   try {
-    const data=await searchAcross({provider,mode,query,offset,limit:SOURCE_LIMIT,signal:controller.signal});
+    const data=await searchAcross({provider,mode,query,offset,limit:SOURCE_LIMIT,signal:controller.signal,
+      onSource:outcome=>{
+        if(request!==serial) return;
+        pending=pending.filter(p=>p!==outcome.provider);
+        if(outcome.error) failed.push(outcome.provider);
+        paint(outcome.tracks);
+      }});
     if(request!==serial) return;
-    window.dispatchEvent(new CustomEvent('spotymusic:register-online',{detail:data.tracks}));
-    const fresh=data.tracks.filter(t=>!displayed.has(t.id));
-    fresh.forEach(t=>displayed.add(t.id));
-    results.insertAdjacentHTML('beforeend',fresh.map(renderRow).join(''));
+    paint(data.tracks);
     offset+=SOURCE_LIMIT;
-    const failed=data.errors.length ? ' · '+data.errors.map(e=>SOURCES[e.provider]+' unavailable').join(', ') : '';
-    status.textContent=(displayed.size ? displayed.size+' listings found' : 'No streamable results found')+
-      ' · '+(provider==='all'?'All free sources':SOURCES[provider])+failed;
-    more.hidden= !fresh.length;
+    status.textContent=summary();
+    more.hidden= !data.tracks.length;
     more.textContent='Load more';
   } catch(error) {
     if(request!==serial||error?.name==='AbortError')return;

@@ -17,8 +17,5 @@ jobs:
           node-version: '22'
       - name: Check JavaScript syntax
         run: |
-          node --check src/audius.mjs
-          node --check src/providers.mjs
-          node --check src/free-catalog.mjs
-          node --check src/app.mjs
+          for file in src/*.mjs server/*.mjs tests/*.mjs; do node --check "$file"; done
       - run: npm test

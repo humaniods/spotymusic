@@ -4,9 +4,29 @@ const ID = /^[A-Za-z0-9_-]{2,80}$/;
 const MODES = new Set(['latest', 'trending', 'search']);
 export const PAGE_SIZE = 18;
 
+const AUDIUS_HOME = 'https://audius.co';
+// A permalink is only ever a same-site relative path ("/handle/track-slug"). Anything
+// shaped like an absolute URL, a scheme or a traversal is dropped so a hostile catalog
+// entry cannot turn the attribution link into a redirect to another host.
+function landingPage(raw) {
+  const path = String(raw?.permalink || '').trim();
+  if (path.length > 200 || !/^\/[A-Za-z0-9._~%()-]+(?:\/[A-Za-z0-9._~%()-]+)*$/.test(path)) return AUDIUS_HOME;
+  return AUDIUS_HOME + path;
+}
+
+// A saved record can be edited in local storage, so re-check the stored host instead of
+// trusting it just because it came from us last time.
+function savedPage(raw) {
+  try {
+    const url = new URL(String(raw?.page || ''));
+    if (url.protocol === 'https:' && url.hostname === 'audius.co') return url.href;
+  } catch { /* fall through to the safe default */ }
+  return AUDIUS_HOME;
+}
+
 export function streamUrl(providerId) {
   if (!ID.test(String(providerId))) throw new Error('Invalid Audius track ID');
-  return AUDIUS_API + '/tracks/' + encodeURIComponent(providerId) + '/stream?app_name=SpotyMusic';
+  return AUDIUS_API + '/tracks/' + encodeURIComponent(providerId) + '/stream?app_name=OpenMic';
 }
 
 export function catalogUrl(options = {}) {
@@ -15,7 +35,7 @@ export function catalogUrl(options = {}) {
   const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
   const path = mode === 'search' ? '/tracks/search' : mode === 'trending' ? '/tracks/trending' : '/tracks/latest';
   const url = new URL(AUDIUS_API + path);
-  url.searchParams.set('app_name', 'SpotyMusic');
+  url.searchParams.set('app_name', 'OpenMic');
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('offset', String(offset));
   if (mode === 'trending') url.searchParams.set('time', 'week');
@@ -40,7 +60,7 @@ export function toFreeTrack(raw) {
   const artist = String(raw.user?.name || raw.user?.handle || raw.artist || 'Audius artist').slice(0, 100);
   const art = Array.from(providerId).reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 6;
   return { id: 'audius:' + providerId, providerId, title, artist,
-    source: streamUrl(providerId), kind: 'audius', art };
+    source: streamUrl(providerId), page: landingPage(raw), kind: 'audius', art };
 }
 
 export function reviveFreeTrack(saved) {
@@ -52,7 +72,8 @@ export function reviveFreeTrack(saved) {
   if (!title) return null;
   return { id: 'audius:' + providerId, providerId, title,
     artist: String(saved.artist || 'Audius artist').slice(0, 100),
-    source: streamUrl(providerId), kind: 'audius', art: Number.isInteger(saved.art) ? Math.abs(saved.art) % 6 : 0 };
+    source: streamUrl(providerId), page: savedPage(saved), kind: 'audius',
+    art: Number.isInteger(saved.art) ? Math.abs(saved.art) % 6 : 0 };
 }
 
 export async function fetchFreeTracks(options = {}, fetchImpl = fetch) {

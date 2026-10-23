@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bgF" cx="50%" cy="0%" r="70%"><stop offset="0" stop-color="#1c545e" stop-opacity=".55"/><stop offset="1" stop-color="#1c545e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="bgF2" cx="92%" cy="86%" r="55%"><stop offset="0" stop-color="#3f7837" stop-opacity=".45"/><stop offset="1" stop-color="#3f7837" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pane5" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".08"/><stop offset="1" stop-color="#ffffff" stop-opacity=".02"/></linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#b6ff52" fill-opacity=".85"/></marker>
+  </defs>
+  <rect width="1200" height="900" fill="#0a0d0f"/>
+  <rect width="1200" height="900" fill="url(#bgF)"/>
+  <rect width="1200" height="900" fill="url(#bgF2)"/>
+
+  <text x="24" y="42" fill="#f2f5f3" font-size="22" font-weight="800">Architecture — zero dependencies on both sides</text>
+  <text x="24" y="64" fill="#96a19e" font-size="11">Vanilla ES modules in the browser (no bundler, no framework), node:http on the server (no Express, no ORM, no database service).</text>
+
+  <!-- band 1: browser -->
+  <rect x="24" y="86" width="1152" height="252" rx="16" fill="url(#pane5)" stroke="#ffffff" stroke-opacity=".16"/>
+  <text x="46" y="114" fill="#b6ff52" font-size="11" font-weight="800" letter-spacing="1.4">BROWSER · src/ · loaded as plain &lt;script type="module"&gt;</text>
+  <g font-size="11" font-weight="800" fill="#f2f5f3">
+    <rect x="46" y="128" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="60" y="150">app.mjs</text><text x="60" y="168" fill="#94a09c" font-size="9" font-weight="400">player, queue, likes, playlists, drop-import</text>
+    <rect x="328" y="128" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".3"/>
+    <text x="342" y="150">free-catalog.mjs + providers.mjs</text><text x="342" y="168" fill="#94a09c" font-size="9" font-weight="400">4-source fan-out · per-source settle · backoff</text>
+    <rect x="610" y="128" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".3"/>
+    <text x="624" y="150">audius.mjs</text><text x="624" y="168" fill="#94a09c" font-size="9" font-weight="400">catalog, stream URL, artist-page credit</text>
+    <rect x="892" y="128" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".3"/>
+    <text x="906" y="150">community-api.mjs</text><text x="906" y="168" fill="#94a09c" font-size="9" font-weight="400">session-aware client · builds /api/stream URL</text>
+
+    <rect x="46" y="190" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="60" y="212">artist.mjs</text><text x="60" y="230" fill="#94a09c" font-size="9" font-weight="400">studio, community list, takedown dialog</text>
+    <rect x="328" y="190" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="342" y="212">core.mjs · dialogs.mjs</text><text x="342" y="230" fill="#94a09c" font-size="9" font-weight="400">state, storage helpers, shared confirm</text>
+    <rect x="610" y="190" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="624" y="212">demo-audio.mjs</text><text x="624" y="230" fill="#94a09c" font-size="9" font-weight="400">synthesises structurally valid WAV fixtures</text>
+    <rect x="892" y="190" width="262" height="52" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="906" y="212">styles.css · artist.css · free-music.css</text><text x="906" y="230" fill="#94a09c" font-size="9" font-weight="400">glass theme tokens, one source of truth</text>
+  </g>
+  <rect x="46" y="256" width="1108" height="62" rx="12" fill="#0e1811" fill-opacity=".55" stroke="#b6ff52" stroke-opacity=".25"/>
+  <text x="64" y="280" fill="#b6ff52" font-size="10" font-weight="800">CLIENT-SIDE PERSISTENCE — nothing about your listening leaves the device unless you publish it</text>
+  <text x="64" y="300" fill="#cfe0cb" font-size="10">localStorage openmic:v1:{online, links, liked, playlists}   ·   IndexedDB holds imported audio bytes</text>
+  <text x="64" y="314" fill="#85908b" font-size="9">id namespaces: demo: · local: · track: · playlist: · audius: · openverse: · commons: · radio: · community:&lt;publicId&gt;</text>
+
+  <!-- band 2: traffic -->
+  <g stroke="#b6ff52" stroke-opacity=".6" fill="none" marker-end="url(#ar)">
+    <path d="M300 344 V400"/><path d="M900 344 V400"/>
+  </g>
+  <g font-size="10">
+    <text x="316" y="366" fill="#dcffc8" font-weight="800">① same-origin /api/*</text>
+    <text x="316" y="382" fill="#9facaa">HttpOnly session cookie · x-openmic-request: 1 on writes</text>
+    <text x="916" y="366" fill="#dcffc8" font-weight="800">② direct CORS to the catalogs</text>
+    <text x="916" y="382" fill="#9facaa">search + stream from the browser</text>
+  </g>
+
+  <!-- band 3: server + outside -->
+  <rect x="24" y="406" width="576" height="336" rx="16" fill="url(#pane5)" stroke="#ffffff" stroke-opacity=".16"/>
+  <text x="46" y="434" fill="#b6ff52" font-size="11" font-weight="800" letter-spacing="1.4">SERVER · server/ · node:http, one process</text>
+  <rect x="46" y="446" width="532" height="212" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".25"/>
+  <text x="62" y="468" fill="#f2f5f3" font-size="11" font-weight="800">api.mjs — the whole route table</text>
+  <g font-size="10" fill="#cfe0cb" font-family="Menlo, Consolas, monospace">
+    <text x="62" y="490">GET    /api/meta                warranty text + limits</text>
+    <text x="62" y="508">POST   /api/signup /login /logout   scrypt + digest cookie</text>
+    <text x="62" y="526">GET    /api/session             who am I (never returns email)</text>
+    <text x="62" y="544">PATCH  /api/profile             rename re-credits published rows</text>
+    <text x="62" y="562">POST   /api/tracks              metadata; pending until bytes land</text>
+    <text x="62" y="580">PUT    /api/tracks/:id/audio    raw bytes, sniffed, SHA-256 hashed</text>
+    <text x="62" y="598">GET    /api/tracks              community search, paged</text>
+    <text x="62" y="616">GET    /api/artists/:handle     public page only</text>
+    <text x="62" y="634">GET    /api/stream/:id          Range → 206 · immutable cache</text>
+    <text x="62" y="652" fill="#ffd0d0">POST   /api/takedown            anonymous allowed, 10/hr</text>
+  </g>
+  <g font-size="10" font-weight="800" fill="#f2f5f3">
+    <rect x="46" y="668" width="122" height="40" rx="9" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="58" y="686">users.mjs</text><text x="58" y="700" fill="#94a09c" font-size="9" font-weight="400">scrypt · strikes</text>
+    <rect x="176" y="668" width="122" height="40" rx="9" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="188" y="686">store.mjs</text><text x="188" y="700" fill="#94a09c" font-size="9" font-weight="400">tmp+rename writes</text>
+    <rect x="306" y="668" width="122" height="40" rx="9" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="318" y="686">static.mjs</text><text x="318" y="700" fill="#94a09c" font-size="9" font-weight="400">no-cache + ETag</text>
+    <rect x="436" y="668" width="142" height="40" rx="9" fill="#ffffff" fill-opacity=".05" stroke="#b6ff52" stroke-opacity=".25"/>
+    <text x="448" y="686">ai.mjs · 5 tasks</text><text x="448" y="700" fill="#94a09c" font-size="9" font-weight="400">rules-first, key optional</text>
+  </g>
+  <text x="46" y="730" fill="#9facaa" font-size="10">③ optional model proxy runs here: OPENMIC_AI_KEY is read from the server env only,</text>
+  <text x="46" y="744" fill="#9facaa" font-size="10">and ./data holds db.json (0600) + audio (dir 0700), git-ignored.</text>
+
+  <rect x="620" y="406" width="556" height="336" rx="16" fill="url(#pane5)" stroke="#ffffff" stroke-opacity=".16"/>
+  <text x="642" y="434" fill="#9fb7c9" font-size="11" font-weight="800" letter-spacing="1.4">OUTSIDE WORLD</text>
+  <g font-size="11" font-weight="800" fill="#f2f5f3">
+    <rect x="642" y="446" width="512" height="40" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="656" y="462">Audius</text><text x="656" y="478" fill="#94a09c" font-size="9" font-weight="400">real chronological upload catalog · source-authorized stream</text>
+    <rect x="642" y="492" width="512" height="40" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="656" y="508">Openverse</text><text x="656" y="524" fill="#94a09c" font-size="9" font-weight="400">CC / public-domain index · "new" means recently indexed</text>
+    <rect x="642" y="538" width="512" height="40" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="656" y="554">Wikimedia Commons</text><text x="656" y="570" fill="#94a09c" font-size="9" font-weight="400">MediaWiki CORS API · per-file licence on its file page</text>
+    <rect x="642" y="584" width="512" height="40" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="656" y="600">Radio Browser</text><text x="656" y="616" fill="#94a09c" font-size="9" font-weight="400">station directory · live, not on-demand, not seekable</text>
+    <rect x="642" y="630" width="512" height="40" rx="10" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".08"/>
+    <text x="656" y="646">Spotify official embed</text><text x="656" y="662" fill="#94a09c" font-size="9" font-weight="400">a pasted link plays inside Spotify's own player, under Spotify's rules</text>
+  </g>
+  <rect x="642" y="682" width="512" height="52" rx="10" fill="#0e1811" fill-opacity=".5" stroke="#b6ff52" stroke-opacity=".24"/>
+  <text x="656" y="702" fill="#b6ff52" font-size="10" font-weight="800">NOT HERE, BY DESIGN</text>
+  <text x="656" y="722" fill="#cfe0cb" font-size="10">Spotify/Apple catalog APIs · DRM unwrapping · private or reversed endpoints · scrapers · re-hosted commercial audio.</text>
+
+  <!-- band 4 -->
+  <rect x="24" y="762" width="1152" height="112" rx="14" fill="url(#pane5)" stroke="#ffffff" stroke-opacity=".14"/>
+  <text x="46" y="792" fill="#b6ff52" font-size="11" font-weight="800">THE TWO HONEST BOUNDARIES</text>
+  <text x="46" y="816" fill="#cfe0cb" font-size="11">① Discovery. Free catalogs are open catalogs. They genuinely hold new independent music, and they genuinely do not hold this week's blockbuster</text>
+  <text x="46" y="834" fill="#cfe0cb" font-size="11">release. OpenMic shows what a provider actually returns, with its credit and licence, instead of pretending the gap is not there.</text>
+  <text x="46" y="858" fill="#cfe0cb" font-size="11">② Publishing. The only recordings this server hosts are ones an identified artist warranted they own or licence — removed on a valid notice,</text>
+  <text x="46" y="874" fill="#cfe0cb" font-size="11">denylisted by fingerprint, two notices end the account. That is the line between a platform and a locker full of other people's work.</text>
+</svg>
