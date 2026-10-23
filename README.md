@@ -1,4 +1,4 @@
-# OpenMic — open-source, no-subscription music player **and** artist publishing
+# OpenMic - open-source, no-subscription music player **and** artist publishing
 
 A responsive, local-first, **MIT-licensed** music app that does two jobs:
 
