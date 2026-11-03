@@ -39,6 +39,11 @@ const FORMATS = {
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const TRACK_ID = /^[\w-]{4,48}$/;
+// A YouTube video id is exactly 11 characters of the base64url alphabet.
+const YOUTUBE_VIDEO = /^[A-Za-z0-9_-]{11}$/;
+export function youtubeKey(env = {}) {
+  return String(env.OPENMIC_YOUTUBE_KEY || '').trim().slice(0, 200);
+}
 
 export function pickFormat(mime) {
   const base = String(mime || '').split(';')[0].trim().toLowerCase();
@@ -160,6 +165,47 @@ function allow(data, key, max, windowMs) {
   entry.count++;
   if (entry.count > max) return { ok: false, retryAfter: Math.ceil((entry.until - now) / 1000) };
   return { ok: true, retryAfter: 0 };
+}
+
+// YouTube search costs 100 of the 10,000 free units a day, so a repeat query inside six
+// hours is answered from disk. The key is a digest because a raw query would let a caller
+// choose object keys - including "__proto__" - on a JSON-parsed map.
+const YT_TTL_MS = 6 * 60 * 60 * 1000;
+const YT_CACHE_MAX = 200;
+function ytCacheKey(query) {
+  return createHash('sha256').update(query.toLowerCase()).digest('hex').slice(0, 32);
+}
+function ytCacheRead(data, key) {
+  const hit = Object.hasOwn(data.ytCache || {}, key) ? data.ytCache[key] : null;
+  if (!hit) return null;
+  if (!(hit.at > Date.now() - YT_TTL_MS)) { delete data.ytCache[key]; return null; }
+  return Array.isArray(hit.items) ? hit.items : null;
+}
+function ytCacheWrite(data, key, items) {
+  data.ytCache = data.ytCache || {};
+  const keys = Object.keys(data.ytCache);
+  if (keys.length >= YT_CACHE_MAX) {
+    keys.sort((a, b) => (data.ytCache[a]?.at || 0) - (data.ytCache[b]?.at || 0));
+    for (const stale of keys.slice(0, Math.ceil(YT_CACHE_MAX / 4))) delete data.ytCache[stale];
+  }
+  data.ytCache[key] = { at: Date.now(), items };
+}
+
+// Only an id and public metadata cross this boundary. The embed URL is built in the
+// browser from the 11-character id, so no response can point the player elsewhere.
+export function youtubeTrack(item) {
+  const videoId = String(item?.id?.videoId || '');
+  if (!YOUTUBE_VIDEO.test(videoId)) return null;
+  const snippet = item?.snippet || {};
+  const title = clipText(snippet.title, 140);
+  if (!title) return null;
+  return {
+    id: videoId, title,
+    artist: clipText(snippet.channelTitle, 100) || 'YouTube',
+    page: 'https://www.youtube.com/watch?v=' + videoId,
+    released: Date.parse(snippet.publishedAt || snippet.publishDate || '') || 0,
+    license: 'Full-length video',
+  };
 }
 
 export function publicTrack(track) {
@@ -291,6 +337,26 @@ export function createApi({ store, audioDir, agentEmail = 'dmca@openmic.invalid'
     });
   }
 
+  // One place talks to Google. The key is added here and nowhere else, so it can never
+  // be echoed into a response body or a log line built from route output.
+  async function youtubeSearch(params) {
+    const endpoint = new URL('https://www.googleapis.com/youtube/v3/search');
+    endpoint.searchParams.set('part', 'snippet');
+    endpoint.searchParams.set('type', 'video');
+    endpoint.searchParams.set('videoCategoryId', '10');
+    for (const [name, value] of Object.entries(params)) endpoint.searchParams.set(name, String(value));
+    endpoint.searchParams.set('key', youtubeKey(env));
+    const response = await fetchImpl(endpoint.toString(), { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error('YouTube did not answer');
+    return response.json();
+  }
+
+  // Search costs 100 of the 10,000 free units a day, so both YouTube routes draw on one
+  // server-wide budget rather than a per-address one.
+  async function youtubeQuota() {
+    return store.mutate(data => allow(data, 'youtube:daily', 90, 24 * 60 * 60 * 1000));
+  }
+
   async function route(req, res, url) {
     const path = url.pathname;
     const method = req.method;
@@ -309,7 +375,65 @@ export function createApi({ store, audioDir, agentEmail = 'dmca@openmic.invalid'
         agent: agentEmail,
         tracks: Object.keys(store.data.tracks).length,
         assistant: { model: aiConfigured(env) ? env.OPENMIC_AI_MODEL : 'local rules' },
+        // Tells the Browse rows whether a full-length click can play in-app or has to
+        // hand off to YouTube's own results page. The key itself never reaches the browser.
+        fullTrack: youtubeKey(env) ? 'youtube-data-api' : 'link-out',
       });
+    }
+
+    if (path === '/api/full-track' && method === 'GET') {
+      const key = youtubeKey(env);
+      if (!key) return fail(res, 501, 'No YouTube Data API key is configured, so full tracks open on YouTube instead.');
+      const question = clipText(url.searchParams.get('q'), 120);
+      if (question.length < 2) return fail(res, 400, 'Tell us which recording to look for.');
+      const gate = await store.mutate(data => allow(data, 'fulltrack:' + clientIp(req), user ? 60 : 20, 60 * 1000));
+      if (!gate.ok) return fail(res, 429, 'Too many lookups from here. Try again in ' + gate.retryAfter + 's.');
+      // A cached answer costs nothing, so clicking the same row twice does not spend the
+      // day's quota twice. Only a miss falls through to Google.
+      const cacheKey = ytCacheKey('one:' + question);
+      await store.load();
+      const known = ytCacheRead(store.data, cacheKey);
+      if (known?.length) return json(res, 200, { videoId: known[0].id, watch: known[0].page, title: known[0].title, cached: true });
+      const day = await youtubeQuota();
+      if (!day.ok) return fail(res, 429, 'This server has used its YouTube search quota for today. Try again tomorrow.');
+      // YouTube Data API v3 is Google's documented, quota-limited search endpoint. It
+      // returns metadata plus an id — never a stream URL — and the player then uses
+      // YouTube's official embed, so YouTube keeps control of playback.
+      let found;
+      try {
+        found = await youtubeSearch({ maxResults: 1, q: question });
+      } catch {
+        return fail(res, 502, 'YouTube did not answer that lookup.');
+      }
+      const one = youtubeTrack(found?.items?.[0]);
+      if (!one) return fail(res, 404, 'YouTube has no official video for that recording.');
+      await store.mutate(data => ytCacheWrite(data, cacheKey, [one]));
+      return json(res, 200, { videoId: one.id, watch: one.page, title: one.title });
+    }
+
+    if (path === '/api/youtube' && method === 'GET') {
+      if (!youtubeKey(env)) return fail(res, 501, 'This OpenMic server has no YouTube key, so full songs are not searchable here.');
+      const question = clipText(url.searchParams.get('q'), 100);
+      if (question.length < 2) return fail(res, 400, 'Type a song or artist name first.');
+      const wanted = Math.min(12, Math.max(1, Number(url.searchParams.get('limit')) || 8));
+      const gate = await store.mutate(data => allow(data, 'youtube:' + clientIp(req), user ? 20 : 6, 60 * 1000));
+      if (!gate.ok) return fail(res, 429, 'Too many YouTube searches from here. Try again in ' + gate.retryAfter + 's.');
+      const cacheKey = ytCacheKey('all:' + question);
+      await store.load();
+      const known = ytCacheRead(store.data, cacheKey);
+      if (known) return json(res, 200, { tracks: known.slice(0, wanted), cached: true });
+      const day = await youtubeQuota();
+      if (!day.ok) return fail(res, 429, 'This server has used its YouTube search quota for today. Try again tomorrow.');
+      let found;
+      try {
+        found = await youtubeSearch({ maxResults: wanted, order: 'relevance', q: question });
+      } catch {
+        return fail(res, 502, 'YouTube did not answer that search.');
+      }
+      const rows = (Array.isArray(found?.items) ? found.items : []).map(youtubeTrack).filter(Boolean).slice(0, wanted);
+      // An empty result is a real answer and is cached too, or a typo would re-bill itself.
+      await store.mutate(data => ytCacheWrite(data, cacheKey, rows));
+      return json(res, 200, { tracks: rows, cached: false });
     }
 
     if (path === '/api/signup' && method === 'POST') {

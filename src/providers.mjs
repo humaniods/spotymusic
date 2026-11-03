@@ -1,10 +1,16 @@
 // Public music discovery providers. Each stream is used only as its source permits.
 // No Spotify stream ripping, paywall bypass, client secrets or bundled copyrighted audio.
 import {fetchFreeTracks, PAGE_SIZE} from './audius.mjs';
+import {chartEntries, itunesChartUrl, itunesSearchUrl, mapItunesChart, mapItunesSearch, newestFirst, savedPreview} from './itunes.mjs';
+import {savedEmbed, youtubeRow} from './youtube.mjs';
 
 export const SOURCES = Object.freeze({
-  audius: 'Audius', openverse: 'Openverse', commons: 'Wikimedia Commons', radio: 'Internet Radio'
+  audius: 'Audius', openverse: 'Openverse', commons: 'Wikimedia Commons', radio: 'Internet Radio',
+  itunes: 'Apple Music', youtube: 'YouTube'
 });
+// Only the first five can be fanned out blindly. YouTube is a metered, key-holding
+// source, so it joins a search when the server says a key is configured.
+export const BROWSE_SOURCES = Object.freeze(Object.keys(SOURCES).filter(key => key !== 'youtube'));
 export const SOURCE_LIMIT = 12;
 const AUDIO_TYPES = /\.(mp3|ogg|oga|wav|flac|m4a|aac|opus|webm)(?:$)/i;
 const PROVIDER_NAMES = Object.keys(SOURCES);
@@ -27,7 +33,9 @@ function isInternalHost(hostname) {
   }
   return false;
 }
-function safeHttp(raw, allowedHttp = false) {
+// Exported because the offline library re-checks a stored row's URL before it fetches
+// bytes from it; a saved row must not be able to aim the fetch at a machine on the LAN.
+export function safeHttp(raw, allowedHttp = false) {
   try {
     const url = new URL(String(raw));
     if (url.protocol !== 'https:' && !(allowedHttp && url.protocol === 'http:')) return null;
@@ -144,7 +152,7 @@ export function mapRadio(raw) {
     source,page:safeHttp(raw.homepage) || 'https://www.radio-browser.info/',license:'Live station · station terms apply',live:true});
 }
 
-// Anonymous callers get throttled hard when four sources fire at once, so retry
+// Anonymous callers get throttled hard when five sources fire at once, so retry
 // the two codes that actually mean "back off". Other 5xx surface immediately.
 const THROTTLED = /HTTP (429|503)\b/;
 const MAX_ATTEMPTS = 3;
@@ -223,12 +231,41 @@ export async function fetchProvider(provider, options={}, fetchImpl=fetch) {
     }
     throw error;
   }
+  if (provider==='itunes') {
+    // Two Apple endpoints, both keyless and CORS-open: the chart feed for discovery,
+    // the search API for a named song. Neither is asked for anything but a preview.
+    if (mode==='search') {
+      const data = await get(itunesSearchUrl({query,limit}));
+      if (!Array.isArray(data?.results)) throw new Error('Unexpected Apple search response');
+      return newestFirst(data.results.map(mapItunesSearch).filter(Boolean)).map(t=>track(t)).filter(Boolean);
+    }
+    const feed = await get(itunesChartUrl({limit}));
+    if (!feed?.feed) throw new Error('Unexpected Apple chart response');
+    const items = chartEntries(feed).map(mapItunesChart).filter(Boolean);
+    // The chart already arrives in Apple's popularity ranking; only New releases re-sorts
+    // by the release date the feed labels on each track.
+    return (mode==='latest' ? newestFirst(items) : items).map(t=>track(t)).filter(Boolean);
+  }
+  if (provider==='youtube') {
+    // Searched through our own server, because the Data API key must never ship to a
+    // browser. A row comes back as an id and a title; both URLs are rebuilt from that id
+    // here, so no response body can point the player at another host. Only a named search
+    // is answered — every search bills the day's quota, so browse modes get nothing.
+    if (mode!=='search') return [];
+    const term = clip(query,100);
+    if (!term) throw new Error('Search query required');
+    const data = await get('/api/youtube?'+new URLSearchParams({q:term,limit:String(Math.min(12,Math.max(1,limit)))}));
+    if (!Array.isArray(data?.tracks)) throw new Error('Unexpected YouTube response');
+    return data.tracks.map(youtubeRow).filter(Boolean).map(t=>track(t)).filter(Boolean);
+  }
   throw new Error('Unsupported provider');
 }
 
 export async function searchAcross({provider='all',mode='search',query='',offset=0,limit=SOURCE_LIMIT,signal,onSource}={}, fetchImpl=fetch) {
-  const selected = provider==='all' ? PROVIDER_NAMES : [provider];
-  if (!selected.every(x=>PROVIDER_NAMES.includes(x))) throw new Error('Unknown source');
+  // "all" means the sources that can be queried without a key or a budget. YouTube
+  // bills a metered quota per search, so the caller adds it explicitly when it wants it.
+  const selected = provider==='all' ? [...BROWSE_SOURCES] : Array.isArray(provider) ? provider : [provider];
+  if (!selected.length || !selected.every(x=>PROVIDER_NAMES.includes(x))) throw new Error('Unknown source');
   // Each source reports back on its own so the screen can paint what has already
   // arrived: Audius answers in about 1.5s while a cold Openverse index takes 10s+.
   const settled=await Promise.all(selected.map(key=>fetchProvider(key,{mode,query,offset,limit,signal},fetchImpl)
@@ -252,9 +289,19 @@ export async function searchAcross({provider='all',mode='search',query='',offset
 export function reviveMultiTrack(saved) {
   if (!saved || typeof saved !== 'object') return null;
   const provider=String(saved.kind||'');
-  if (!['openverse','commons','radio'].includes(provider)) return null;
+  if (!['openverse','commons','radio','itunes','youtube'].includes(provider)) return null;
   const id=String(saved.id||'');
   if (!id.startsWith(provider+':')) return null;
+  // A saved YouTube row is nothing but an 11-character video id; both URLs are rebuilt
+  // from it here, so a storage row cannot aim the player at some other host.
+  if (provider==='youtube') {
+    const row=savedEmbed(saved);
+    return row ? track(row) : null;
+  }
+  // Apple clips are addressed by an opaque asset path rather than the track id, so a
+  // stored row is rebuilt against Apple's own preview host instead of trusted as-is.
+  const source=provider==='itunes' ? savedPreview(saved) : saved.source;
+  if (provider==='itunes' && !source) return null;
   return track({provider,id:id.slice(provider.length+1),title:saved.title,artist:saved.artist,
-    source:saved.source,page:saved.page,license:saved.license,live:provider==='radio'});
+    source,page:saved.page,license:saved.license,live:provider==='radio'});
 }
