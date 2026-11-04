@@ -2,8 +2,13 @@ import { parseSpotifyUrl, formatTime, nextIndex, searchItems, escapeHtml, safeFi
 import { makeDemo } from './demo-audio.mjs';
 import { reviveFreeTrack } from './audius.mjs';
 import { reviveMultiTrack, SOURCES } from './providers.mjs';
-import { reviveCommunity } from './community-api.mjs';
+import { communityApi, reviveCommunity } from './community-api.mjs';
 import { askConfirm } from './dialogs.mjs';
+import {
+  canCache, fetchAudio, planEviction, buildRecord, formatBytes, offlineCell,
+  openLibrary, listSaved, saveSaved, readSavedAudio, touchSaved, dropSaved,
+  requestPersistence, DEFAULT_CAP_BYTES
+} from './library.mjs';
 
 // Demo audio is synthesized on first play, not at import: three 20-second WAVs cost
 // about 160ms of main-thread work and 1.3MB of blobs on every page load otherwise.
@@ -27,20 +32,24 @@ const ART = [
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const audio = $('#audio');
-const state = {tracks:[...DEMOS],online:[],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map()};
-let db = null, toastTimer;
+const state = {tracks:[...DEMOS],online:[],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map(),offline:new Map(),saving:new Set(),playingOffline:false};
+let db = null, offlineDb = null, toastTimer;
 // Re-importing the same file is the easiest way to double-book a library.
 const fingerprints=new Set();
 
 function readJSON(key, fallback) {
   try {const value = JSON.parse(localStorage.getItem(`openmic:v1:${key}`));return value ?? fallback;}catch{return fallback;}
 }
+// Each source has its own reviver because each one re-checks its own id shape and
+// rebuilds the stream URL instead of trusting the stored copy. A saved record whose
+// kind no longer matches is dropped rather than played from an unchecked URL.
+const reviveSaved = saved => reviveFreeTrack(saved) || reviveMultiTrack(saved) || reviveCommunity(saved);
 function persist() {
   try {
     localStorage.setItem('openmic:v1:links',JSON.stringify(state.links));
     localStorage.setItem('openmic:v1:liked',JSON.stringify([...state.liked]));
     localStorage.setItem('openmic:v1:playlists',JSON.stringify(state.playlists));
-    const retained = state.online.filter(item => state.liked.has(item.id) || state.playlists.some(list => list.ids.includes(item.id))).slice(-300);
+    const retained = state.online.filter(item => protectedId(item.id)).slice(-300);
     localStorage.setItem('openmic:v1:online',JSON.stringify(retained.map(({id,title,artist,source,page,license,kind,provider,art,handle}) => ({id,title,artist,source,page,license,kind,provider,art,handle}))));
   } catch { toast('Storage unavailable; changes may not persist'); }
 }
@@ -66,20 +75,27 @@ function ownedOnline(){return state.online.filter(t=>isLiked(t.id)||state.playli
 function searchableItems(){return [...allItems(),...ownedOnline()];}
 function getItem(id){return allItems().find(t=>t.id===id)||state.online.find(t=>t.id===id);}
 function isLiked(id){return state.liked.has(id);}
-function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#toggle-play)');controls.forEach(btn=>btn.disabled=state.current?.kind==='spotify');$('#toggle-play').disabled=state.current?.kind==='spotify';$('#seek').disabled=state.current?.kind==='spotify' || state.current?.live===true;$('#volume').disabled=state.current?.kind==='spotify';}
+// Spotify and YouTube rows carry no bytes: the provider's own frame plays them, so the
+// audio element, the transport and the queue all have to stand aside for either of them.
+function isEmbed(item){return item?.kind==='spotify'||item?.kind==='youtube';}
+function notifyNextStatus(){const controls=$$('.transport-buttons button:not(#toggle-play)');const held=isEmbed(state.current);controls.forEach(btn=>btn.disabled=held);$('#toggle-play').disabled=held;$('#seek').disabled=held || state.current?.live===true;$('#volume').disabled=held;}
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),2900);}
 function artStyle(item){return ART[Number.isInteger(item?.art)?item.art%ART.length:3];}
-function glyph(item){return item?.kind==='spotify'?'◉':item?.kind==='demo'?'♫':'♪';}
+function glyph(item){return isEmbed(item)?'◉':item?.kind==='demo'?'♫':'♪';}
 function kindLabel(item){
+  // A kept copy changes what the row means: the same listing now plays off this disk.
+  const cached=state.offline.has(item.id)?' · OFFLINE':'';
   if(item.kind==='spotify')return `SPOTIFY ${escapeHtml(item.spotifyKind).toUpperCase()}`;
+  if(item.kind==='youtube')return 'YOUTUBE FULL VIDEO';
   if(item.kind==='demo')return 'ORIGINAL DEMO';
-  if(item.kind==='audius')return 'AUDIUS FREE STREAM';
+  if(item.kind==='audius')return 'AUDIUS FREE STREAM'+cached;
   if(item.kind==='radio')return 'LIVE RADIO';
-  if(item.kind==='community')return 'ARTIST UPLOAD';
-  return SOURCES[item.kind]||'LOCAL AUDIO';
+  if(item.kind==='community')return 'ARTIST UPLOAD'+cached;
+  return (SOURCES[item.kind]||'LOCAL AUDIO')+cached;
 }
 function playbackLabel(item){
-  if(item?.kind==='spotify')return 'SPOTIFY EMBED';
+  if(isEmbed(item))return (item.kind==='spotify'?'SPOTIFY':'YOUTUBE')+' EMBED';
+  if(state.playingOffline&&state.offline.has(item?.id))return 'OFFLINE COPY · THIS DEVICE';
   if(item?.kind==='audius')return 'AUDIUS · FREE STREAM';
   if(item?.kind==='radio')return 'LIVE RADIO';
   if(item?.kind==='community')return 'ARTIST UPLOAD · OPENMIC SERVER';
@@ -90,7 +106,7 @@ function likedClass(item){return isLiked(item.id)?' liked':'';}
 function removableKind(kind){return kind==='local'||kind==='spotify';}
 // Rows keep a fixed slot so the library grid does not shift between removable and
 // read-only listings.
-function rowRemove(item){return removableKind(item.kind)?`<button class="row-remove" data-action="remove" data-id="${escapeHtml(item.id)}" title="Remove from library" aria-label="Remove ${escapeHtml(item.title)} from library">${icon('trash')}</button>`:'<span class="row-slot" aria-hidden="true"></span>';}
+function rowRemove(item){return removableKind(item.kind)?`<button class="row-remove" data-action="remove" data-id="${escapeHtml(item.id)}" title="Remove from library" aria-label="Remove ${escapeHtml(item.title)} from library">${icon('trash')}</button>`:offlineMarkup(item);}
 function itemRow(item,index){const active=item.id===state.current?.id;return `<div class="track-item${active?' selected':''}" data-id="${escapeHtml(item.id)}"><button class="row-play" data-action="play" data-id="${escapeHtml(item.id)}" aria-label="Play ${escapeHtml(item.title)}">${icon('play')}</button><div class="track-cover" style="background:${artStyle(item)}"><span>${glyph(item)}</span></div><div style="min-width:0"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><div class="track-kind">${kindLabel(item)}</div><button class="icon-button row-like${likedClass(item)}" data-action="like" data-id="${escapeHtml(item.id)}" title="Like" aria-label="Like ${escapeHtml(item.title)}">${icon('heart')}</button><button class="icon-button row-add" data-action="add" data-id="${escapeHtml(item.id)}" title="Add to playlist" aria-label="Add ${escapeHtml(item.title)} to playlist">${icon('plus')}</button>${rowRemove(item)}</div>`;}
 function empty(text,sub='Use the buttons above to add something.'){return `<div class="empty-state"><b>${escapeHtml(text)}</b>${escapeHtml(sub)}</div>`;}
 function renderRows(selector,items,emptyMsg='No items yet'){const container=$(selector);container.innerHTML=items.length?items.map(itemRow).join(''):empty(emptyMsg);}
@@ -98,8 +114,8 @@ function renderFeatured(){ $('#featured-grid').innerHTML=DEMOS.map(item=>`<artic
 function renderSidebar(){const nav=$('#playlist-nav');nav.innerHTML=state.playlists.length?state.playlists.map(p=>`<button class="playlist-link${state.page==='playlist'&&state.activePlaylist===p.id?' active':''}" data-action="playlist" data-id="${escapeHtml(p.id)}">${icon('music')}<span>${escapeHtml(p.name)}</span></button>`).join(''):'<div class="muted-side">Create a playlist to organize your music.</div>'; $$('.nav-item').forEach(btn=>btn.classList.toggle('active',btn.dataset.page===state.page));}
 function renderPage(){
   renderSidebar();
-  ['home-panel','search-panel','library-panel','collection-panel','free-panel','community-panel','artist-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
-  const breadcrumb={home:'Your listening space',search:'Find your music',free:'Free music',community:'Community releases',artist:'For artists',library:'Your collection',liked:'Your favourites',playlist:'Your playlist'};
+  ['home-panel','search-panel','library-panel','collection-panel','free-panel','community-panel','artist-panel','offline-panel'].forEach(id=>$('#'+id).classList.add('hidden'));
+  const breadcrumb={home:'Your listening space',search:'Find your music',free:'Free music',community:'Community releases',artist:'For artists',library:'Your collection',offline:'Offline library',liked:'Your favourites',playlist:'Your playlist'};
   $('#breadcrumb').textContent=breadcrumb[state.page]||breadcrumb.home;
   if(state.page==='home'){
     $('#home-panel').classList.remove('hidden');
@@ -117,6 +133,18 @@ function renderPage(){
   } else if(state.page==='library'){
     $('#library-panel').classList.remove('hidden');
     const items=allItems();$('#library-count').textContent=`${items.length} saved items`;renderRows('#library-list',items,'No tracks saved');
+  } else if(state.page==='offline'){
+    $('#offline-panel').classList.remove('hidden');
+    const rows=[...state.offline.values()];
+    const items=rows.map(row=>row.item||getItem(row.key)).filter(Boolean);
+    $('#offline-count').textContent=rows.length
+      ?`${items.length} recording${items.length===1?'':'s'} · ${formatBytes(offlineUsed())} of ${formatBytes(offlineCap())} kept on this device`
+      :'Nothing saved yet';
+    $('#offline-bar').style.width=offlineCap()?Math.min(100,offlineUsed()/offlineCap()*100)+'%':'0%';
+    $('#offline-note').textContent=rows.length
+      ?'These play with the network switched off. OpenMic keeps a copy only where the recording itself is free to keep - Audius, Openverse, Wikimedia Commons and artist uploads from this server.'
+      :'Tap the download arrow on an Audius, Openverse, Wikimedia Commons or artist-upload row, and it will be here when you have no signal.';
+    renderRows('#offline-list',items,'No offline recordings yet');
   } else {
     $('#collection-panel').classList.remove('hidden');
     const playlist=state.playlists.find(p=>p.id===state.activePlaylist);
@@ -128,9 +156,12 @@ function renderPage(){
     $('#collection-subtitle').textContent=`${items.length} item${items.length===1?'':'s'} · Your personal collection`;
     renderRows('#collection-list',items,'This collection is empty','Tap ♥ or + on a song to save it here.');
   }
+  // Last, because every branch above rewrites its rows from scratch: marking the saved
+  // copies before the lists exist left an Offline row showing a download arrow.
+  syncOfflineButtons();
 }
 function navigate(page, playlistId){state.page=page;if(playlistId)state.activePlaylist=playlistId;renderPage();$('#main-scroll').scrollTop=0;if(page==='search')$('#search-input').focus();window.dispatchEvent(new CustomEvent('openmic:navigate',{detail:{page}}));}
-function updatePlayIcon(){const playing=!audio.paused&&state.current?.kind!=='spotify';$('#toggle-play').innerHTML=icon(playing?'pause':'play');$('#toggle-play').setAttribute('aria-label',playing?'Pause':'Play');}
+function updatePlayIcon(){const playing=!audio.paused&&!isEmbed(state.current);$('#toggle-play').innerHTML=icon(playing?'pause':'play');$('#toggle-play').setAttribute('aria-label',playing?'Pause':'Play');}
 function updateFooter(){
  const item=state.current;$('#player-title').textContent=item?.title||'Nothing playing yet';$('#player-artist').textContent=item?.artist||'Choose a track';$('#player-cover').textContent=item?glyph(item):'♫';$('#player-cover').style.background=item?artStyle(item):ART[3];
  $('#player-like').disabled=!item;$('#player-like').classList.toggle('liked',!!item&&isLiked(item.id));
@@ -142,9 +173,139 @@ function updateFooter(){
  $('#shuffle').classList.toggle('enabled',state.shuffle);$('#repeat').classList.toggle('enabled',state.repeat!=='off');$('#repeat').title=`Repeat: ${state.repeat}`;
  updatePlayIcon();notifyNextStatus();
 }
-function clearSpotifyFrame(){const frame=$('#spotify-frame');frame.removeAttribute('src');frame.removeAttribute('data-big');$('#embed-container').classList.add('hidden');$('.rightbar').classList.remove('embed-active');$('#local-info').classList.remove('hidden');}
-function enableSpotifyFrame(item){const parsed=parseSpotifyUrl(item.url);if(!parsed)return toast('Invalid Spotify link');const frame=$('#spotify-frame');frame.src=parsed.embedUrl;frame.dataset.big=parsed.kind==='track'?'false':'true';$('#spotify-open').href=parsed.url;$('#embed-container').classList.remove('hidden');$('.rightbar').classList.add('embed-active');$('#local-info').classList.add('hidden');}
+const SPOTIFY_EMBED={label:'PLAYED BY SPOTIFY',help:'Spotify controls playback in this frame. Free-account limits and ads still apply.',open:'Open on Spotify',title:'Official Spotify embed player'};
+const YOUTUBE_EMBED={label:'PLAYED BY YOUTUBE',help:'YouTube controls playback in this frame. Its own ads and account limits apply.',open:'Open on YouTube',title:'Official YouTube embed player'};
+function clearEmbed(){const frame=$('#spotify-frame');frame.removeAttribute('src');frame.removeAttribute('data-big');$('#embed-container').classList.add('hidden');$('.rightbar').classList.remove('embed-active');$('#local-info').classList.remove('hidden');}
+// One frame, whoever owns the playback. The provider's name, help line and outbound link
+// all move with it, so a YouTube embed never keeps Spotify's label on screen.
+function showEmbed({watch,embed,big,copy}){const frame=$('#spotify-frame');frame.src=embed;frame.dataset.big=String(big);frame.setAttribute('title',copy.title);$('#embed-label').textContent=copy.label+' ↗';$('#embed-help').textContent=copy.help;$('#spotify-open').href=watch;$('#spotify-open-label').textContent=copy.open;$('#embed-container').classList.remove('hidden');$('.rightbar').classList.add('embed-active');$('#local-info').classList.add('hidden');}
+function enableSpotifyFrame(item){const parsed=parseSpotifyUrl(item.url);if(!parsed)return toast('Invalid Spotify link');showEmbed({watch:parsed.url,embed:parsed.embedUrl,big:parsed.kind!=='track',copy:SPOTIFY_EMBED});}
+function enableYouTubeFrame(videoId){if(!/^[A-Za-z0-9_-]{11}$/.test(videoId))return toast('YouTube did not return a playable video');showEmbed({watch:'https://www.youtube.com/watch?v='+videoId,embed:'https://www.youtube-nocookie.com/embed/'+videoId+'?autoplay=1&rel=0',big:true,copy:YOUTUBE_EMBED});}
+// A YouTube row plays from its id alone; both the frame URL and the outbound link are
+// rebuilt here, so a tampered source field can never point the panel at another host.
+function enableYouTubeRow(item){const id=String(item?.id||'');return id.startsWith('youtube:')?enableYouTubeFrame(id.slice('youtube:'.length)):toast('This YouTube listing is not playable');}
 function releaseAudio(){audio.pause();audio.removeAttribute('src');audio.load();}
+// --- the offline library -------------------------------------------------------
+// A recording is kept on this device only when its bytes genuinely arrived here: the
+// openly licensed catalogs and the artist uploads this server hosts. Embed rows play
+// inside the provider's own frame and radio is a live broadcast, so there is no file to
+// keep and the row gets no save control at all.
+function offlineCap(){
+  const stored=Number(readJSON('offline-cap',0));
+  return stored>=20*1024*1024?stored:DEFAULT_CAP_BYTES;
+}
+function offlineUsed(){let sum=0;for(const row of state.offline.values())sum+=Number(row.bytes)||0;return sum;}
+function protectedId(id){return state.liked.has(id)||state.playlists.some(p=>p.ids.includes(id))||state.offline.has(id);}
+function offlineMarkup(item){
+  if(!canCache(item))return '<span class="row-slot" aria-hidden="true"></span>';
+  return offlineCell(escapeHtml(item.id),escapeHtml(item.title));
+}
+// The rows are drawn by three different screens, so they all render the same static
+// control and this is the only place that knows which copies are actually on disk.
+function syncOfflineButtons(){
+  document.querySelectorAll('[data-action="offline"]').forEach(button=>{
+    const saved=state.offline.has(button.dataset.id);
+    button.classList.toggle('saved',saved);
+    button.title=saved?'Offline copy on this device - tap to remove':'Save offline - plays with no internet';
+  });
+}
+async function loadOfflineLibrary(){
+  try{offlineDb=await openLibrary();}catch(error){console.warn('Offline storage unavailable',error);return;}
+  const rows=await listSaved(offlineDb);
+  for(const row of rows){
+    const item=reviveSaved(row.item);
+    // A copy whose row no longer revives is audio nobody can reach or play; drop it rather
+    // than keep paying for bytes with no listing to open them from.
+    if(!item){dropSaved(offlineDb,[row.key]).catch(()=>{});continue;}
+    state.offline.set(row.key,{...row,item});
+    if(!state.online.some(t=>t.id===item.id))state.online.push({...item,art:item.art??6});
+  }
+  renderPage();updateFooter();
+}
+async function saveOffline(item){
+  if(state.saving.has(item.id))return;
+  state.saving.add(item.id);
+  try{
+    const blob=await fetchAudio(item);
+    const plan=planEviction([...state.offline.values()],blob.size,offlineCap(),[item.id,state.current?.id]);
+    if(!plan.ok)throw new Error(plan.reason==='too-big'
+      ?'That recording is larger than the whole offline library.'
+      :'No room left. Remove an offline copy and try again.');
+    if(plan.drop.length){
+      await dropSaved(offlineDb,plan.drop);
+      for(const key of plan.drop)forgetOfflineCopy(key);
+      toast('Made room by dropping '+plan.drop.length+' least-listened '+(plan.drop.length===1?'copy':'copies'));
+    }
+    // A browser drops ordinary storage when the disk fills up, which would undo exactly
+    // what the listener asked for, so the first write asks for persisted storage.
+    await requestPersistence();
+    const record=buildRecord(item,blob);
+    if(!record)throw new Error('This recording cannot be saved offline.');
+    record.blob=blob;
+    await saveSaved(offlineDb,record);
+    const{blob:_drop,...meta}=record;
+    state.offline.set(meta.key,meta);
+    toast('Saved '+formatBytes(blob.size)+' on this device. It plays without internet.');
+  }catch(error){
+    toast(String(error?.message||error));
+  }finally{
+    state.saving.delete(item.id);
+    renderPage();syncOfflineButtons();
+  }
+}
+function forgetOfflineCopy(id){
+  state.offline.delete(id);
+  // Keep the object URL of whatever is playing: revoking mid-playback cuts the audio off
+  // for a copy the listener only asked to delete from the list.
+  if(state.current?.id!==id){
+    const url=state.objectUrls.get(id);
+    if(url){URL.revokeObjectURL(url);state.objectUrls.delete(id);}
+  }
+}
+async function removeOffline(id){
+  await dropSaved(offlineDb,[id]);
+  forgetOfflineCopy(id);
+  renderPage();syncOfflineButtons();
+  if(state.page==='offline')updateFooter();
+  toast('Offline copy removed from this device');
+}
+async function toggleOffline(id){
+  const item=getItem(id);
+  if(!item)return toast('Track not found');
+  if(state.offline.has(id))return removeOffline(id);
+  if(!canCache(item))return toast('This listing plays in the provider\'s own player, so there is no file here to keep.');
+  if(!navigator.onLine)return toast('You are offline right now, so there is nothing to download yet.');
+  // The button lives in whichever list the listener clicked, so it is marked here rather
+  // than rebuilt by a re-render of the whole screen.
+  const button=document.querySelector('[data-action="offline"][data-id="'+CSS.escape(id)+'"]');
+  if(button){button.classList.add('busy');button.disabled=true;}
+  await saveOffline(item);
+  if(button){button.classList.remove('busy');button.disabled=false;}
+}
+// Cached first: a copy on disk is the point of the library, so it wins over the stream
+// even when the network is up and healthy.
+async function resolveSource(item){
+  if(item.kind==='demo')return demoSource(item);
+  if(state.offline.has(item.id)){
+    if(!state.objectUrls.has(item.id)){
+      const blob=await readSavedAudio(offlineDb,item.id).catch(()=>null);
+      if(blob)state.objectUrls.set(item.id,URL.createObjectURL(blob));
+      else{state.offline.delete(item.id);toast('That offline copy is missing, so it will stream again.');}
+    }
+    if(state.objectUrls.has(item.id)){
+      touchSaved(offlineDb,item.id).catch(()=>{});
+      state.playingOffline=true;
+      return state.objectUrls.get(item.id);
+    }
+  }
+  state.playingOffline=false;
+  return item.source||state.objectUrls.get(item.id);
+}
+function registerServiceWorker(){
+  // The shell has to load offline for a saved recording to be listenable offline.
+  if(!('serviceWorker'in navigator)||!location.protocol.startsWith('http'))return;
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
 let playlistTarget=null;
 function renderPlaylistOptions(){
   const box=$('#playlist-options');
@@ -204,7 +365,7 @@ async function removeItem(id){
   const position=state.queue.indexOf(id);
   state.queue=state.queue.filter(x=>x!==id);
   if(position>-1&&position<=state.queueIndex)state.queueIndex=Math.max(0,state.queueIndex-1);
-  if(wasCurrent){state.current=null;releaseAudio();clearSpotifyFrame();}
+  if(wasCurrent){state.current=null;releaseAudio();clearEmbed();}
   persist();renderPage();updateFooter();
   toast(item.kind==='local'?'Audio file deleted':'Spotify link removed');
 }
@@ -230,19 +391,37 @@ function forgetTrack(id){
   for(const playlist of state.playlists)playlist.ids=playlist.ids.filter(x=>x!==id);
   state.online=state.online.filter(t=>t.id!==id);
   state.queue=state.queue.filter(x=>x!==id);
-  if(state.current?.id===id){state.current=null;releaseAudio();clearSpotifyFrame();}
+  // A takedown ends the listener's right to play it, so the copy on this device goes too.
+  if(state.offline.has(id)){dropSaved(offlineDb,[id]).catch(()=>{});forgetOfflineCopy(id);}
+  if(state.current?.id===id){state.current=null;releaseAudio();clearEmbed();}
   persist();renderPage();updateFooter();
 }
-async function playItem(id, queueIds){const item=getItem(id);if(!item)return toast('Track not found');if(Array.isArray(queueIds)){state.queue=queueIds.filter(x=>getItem(x));state.queueIndex=Math.max(0,state.queue.indexOf(id));}else if(!state.queue.includes(id)){state.queue=allItems().filter(t=>t.kind!=='spotify').map(t=>t.id);if(!state.queue.includes(id))state.queue=[id,...state.queue];state.queueIndex=state.queue.indexOf(id);}else state.queueIndex=state.queue.indexOf(id);
-  if(state.current?.id===id&&item.kind!=='spotify'){if(audio.paused){try{await audio.play();}catch{toast('Could not play this audio file');}}else audio.pause();updateFooter();return;}
+async function playItem(id, queueIds){const item=getItem(id);if(!item)return toast('Track not found');if(Array.isArray(queueIds)){state.queue=queueIds.filter(x=>getItem(x));state.queueIndex=Math.max(0,state.queue.indexOf(id));}else if(!state.queue.includes(id)){state.queue=allItems().filter(t=>!isEmbed(t)).map(t=>t.id);if(!state.queue.includes(id))state.queue=[id,...state.queue];state.queueIndex=state.queue.indexOf(id);}else state.queueIndex=state.queue.indexOf(id);
+  if(state.current?.id===id&&!isEmbed(item)){if(audio.paused){try{await audio.play();}catch{toast('Could not play this audio file');}}else audio.pause();updateFooter();return;}
   state.current=item;
   if(item.kind==='spotify'){releaseAudio();enableSpotifyFrame(item);toast('Official Spotify player opened');}
-  else{clearSpotifyFrame();releaseAudio();const source=item.kind==='demo'?demoSource(item):(item.source||state.objectUrls.get(item.id));if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();}catch(error){await reportPlayFailure(item,error);}}
-  updateFooter();renderPage();
+  else if(item.kind==='youtube'){releaseAudio();enableYouTubeRow(item);toast('Official YouTube player opened');}
+  else{clearEmbed();releaseAudio();const source=await resolveSource(item);if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();}catch(error){await reportPlayFailure(item,error);}}
+  updateFooter();renderPage();syncOfflineButtons();
 }
 function step(direction){if(!state.queue.length)return;let index;if(direction===-1){index=state.queueIndex>0?state.queueIndex-1:state.repeat==='all'?state.queue.length-1:-1;}else{index=nextIndex(state.queueIndex,state.queue.length,{repeat:state.repeat,shuffle:state.shuffle});}if(index<0){audio.pause();audio.currentTime=0;updateFooter();return;}state.queueIndex=index;playItem(state.queue[index],state.queue);}
 function toggleLike(id){if(!getItem(id))return;state.liked.has(id)?state.liked.delete(id):state.liked.add(id);persist();document.querySelectorAll('#free-results [data-action="like"]').forEach(button=>{if(button.dataset.id===id)button.classList.toggle('liked',state.liked.has(id));});renderPage();updateFooter();}
 function addToPlaylist(id){if(getItem(id))openPlaylistDialog(id);}
+// Apple's rows stream a 30-second clip, so the full listen is handed to YouTube. The key
+// stays on the server; a 501 here would mean the row rendered the wrong tier.
+function openFullTrack(button){
+  const lookup=String(button.dataset.query||'').trim().slice(0,120);
+  if(!lookup)return toast('Nothing to look for');
+  button.disabled=true;
+  // Two players at once would talk over each other, so the 30-second preview stops
+  // before the full recording starts.
+  audio.pause();
+  updateFooter();
+  communityApi.fullTrack(lookup)
+    .then(found=>{enableYouTubeFrame(found.videoId);toast('Full recording playing from YouTube');})
+    .catch(error=>toast(error?.status===404?'YouTube has no official video for that recording.':error.message))
+    .finally(()=>{button.disabled=false;});
+}
 function createPlaylist(){openPlaylistDialog(null);}
 function openSpotifyDialog(){$('#spotify-form').reset();$('#modal-error').textContent='';$('#spotify-dialog').showModal();$('#spotify-url').focus();}
 function saveSpotifyLink(event){event.preventDefault();const parsed=parseSpotifyUrl($('#spotify-url').value);if(!parsed){$('#modal-error').textContent='Please enter a valid open.spotify.com URL or spotify: URI.';return;}const existing=state.links.find(link=>link.id===parsed.id);if(existing){$('#spotify-dialog').close();playItem(existing.id);navigate('library');return;}const title=$('#spotify-name').value.trim().slice(0,100)||`Spotify ${parsed.kind} · ${parsed.spotifyId.slice(0,8)}`;const item={...parsed,title,artist:'Spotify · Official embed',kind:'spotify',spotifyKind:parsed.kind,art:4};state.links.unshift(item);persist();$('#spotify-dialog').close();navigate('library');playItem(item.id);toast('Spotify link saved');}
@@ -269,12 +448,12 @@ function events(){
       else safe=reviveMultiTrack(item);
       if(safe) tracks.set(safe.id,{...safe,art:item.art});
     }
-    const protectedIds=new Set([...state.liked,...state.playlists.flatMap(p=>p.ids)]);
+    const protectedIds=new Set([...state.liked,...state.playlists.flatMap(p=>p.ids),...state.offline.keys()]);
     const keep=[...tracks.values()];
     state.online = keep.filter(t=>protectedIds.has(t.id)).concat(keep.filter(t=>!protectedIds.has(t.id)).slice(-360));
   });
   document.addEventListener('click',event=>{
-    const click=event.target.closest('[data-action]');if(click){const {action,id}=click.dataset;if(action==='play'){const collection=click.closest('.track-list');const ids=collection?[...collection.querySelectorAll('.track-item')].map(row=>row.dataset.id):DEMOS.map(t=>t.id);playItem(id,ids);return;}if(action==='like')return toggleLike(id);if(action==='add')return addToPlaylist(id);if(action==='remove')return removeItem(id);if(action==='playlist')return navigate('playlist',id);}
+    const click=event.target.closest('[data-action]');if(click){const {action,id}=click.dataset;if(action==='play'){const collection=click.closest('.track-list');const ids=collection?[...collection.querySelectorAll('.track-item')].map(row=>row.dataset.id):DEMOS.map(t=>t.id);playItem(id,ids);return;}if(action==='like')return toggleLike(id);if(action==='add')return addToPlaylist(id);if(action==='full-track')return openFullTrack(click);if(action==='offline')return toggleOffline(id);if(action==='remove')return removeItem(id);if(action==='playlist')return navigate('playlist',id);}
     const nav=event.target.closest('[data-page]');if(nav)navigate(nav.dataset.page);
   });
   $('#brand-home').addEventListener('click',()=>navigate('home'));
@@ -297,21 +476,25 @@ function events(){
   $('#repeat').addEventListener('click',()=>{const modes=['off','all','one'];state.repeat=modes[(modes.indexOf(state.repeat)+1)%3];updateFooter();toast(`Repeat: ${state.repeat}`);});
   $('#volume').addEventListener('input',event=>audio.volume=Number(event.target.value)/100);
   $('#seek').addEventListener('input',event=>{if(!state.current?.live && Number.isFinite(audio.duration))audio.currentTime=Number(event.target.value)/100*audio.duration;});
-  audio.addEventListener('timeupdate',updateFooter);audio.addEventListener('durationchange',updateFooter);audio.addEventListener('play',updateFooter);audio.addEventListener('pause',updateFooter);audio.addEventListener('ended',()=>step(1));audio.addEventListener('error',()=>{if(state.current?.kind!=='spotify')toast('Stream unavailable or not supported in this browser. Try another track or station.');});
+  audio.addEventListener('timeupdate',updateFooter);audio.addEventListener('durationchange',updateFooter);audio.addEventListener('play',updateFooter);audio.addEventListener('pause',updateFooter);audio.addEventListener('ended',()=>step(1));audio.addEventListener('error',()=>{if(!isEmbed(state.current))toast('Stream unavailable or not supported in this browser. Try another track or station.');});
   document.addEventListener('keydown',event=>{const node=event.target.closest('.album-card');if(node&&(event.key==='Enter'||event.key===' ')){event.preventDefault();playItem(node.dataset.id,DEMOS.map(t=>t.id));}});
+  // Free Music and Community draw their own rows and neither one knows what is on disk, so
+  // watching those two lists beats making every screen ask for the offline state.
+  if('MutationObserver' in window){
+    const offlineObserver=new MutationObserver(()=>syncOfflineButtons());
+    for(const list of ['#free-results','#community-results']){const node=$(list);if(node)offlineObserver.observe(node,{childList:true,subtree:true});}
+  }
   let dragDepth=0;window.addEventListener('dragenter',event=>{event.preventDefault();dragDepth++;document.body.classList.add('drop-active');});window.addEventListener('dragleave',event=>{event.preventDefault();dragDepth=Math.max(0,dragDepth-1);if(dragDepth===0)document.body.classList.remove('drop-active');});window.addEventListener('dragover',event=>event.preventDefault());window.addEventListener('drop',event=>{event.preventDefault();dragDepth=0;document.body.classList.remove('drop-active');if(event.dataTransfer?.files.length)importFiles(event.dataTransfer.files);});
   window.addEventListener('beforeunload',()=>{for(const url of state.objectUrls.values())URL.revokeObjectURL(url);});
 }
 async function init(){
   state.links=sanitizeLinks(readJSON('links',[]));
-  // Each source has its own reviver because each one re-checks its own id shape and
-  // rebuilds the stream URL instead of trusting the stored copy. A saved record whose
-  // kind no longer matches is dropped rather than played from an unchecked URL.
-  const reviveSaved = saved => reviveFreeTrack(saved) || reviveMultiTrack(saved) || reviveCommunity(saved);
   state.online=(Array.isArray(readJSON('online',[])) ? readJSON('online',[]) : []).map(reviveSaved).filter(Boolean).slice(-300);
   state.liked=new Set(readJSON('liked',[]).filter(id=>typeof id==='string'));
   state.playlists=readJSON('playlists',[]).filter(isValidPlaylist).slice(0,100).map(p=>({id:p.id,name:p.name.slice(0,60),ids:p.ids.filter(id=>typeof id==='string')}));
   try{db=await openDB();const rows=await dbAll();for(const record of rows){if(!record?.file||!record?.item?.id)continue;if(record.item.fp)fingerprints.add(record.item.fp);state.tracks.push(record.item);state.objectUrls.set(record.item.id,URL.createObjectURL(record.file));}}catch(error){console.warn('Browser database unavailable',error);}
   state.queue=state.tracks.map(track=>track.id);audio.volume=.75;events();renderPage();updateFooter();
+  loadOfflineLibrary().catch(error=>console.warn('Offline library unavailable',error));
+  registerServiceWorker();
 }
 init();

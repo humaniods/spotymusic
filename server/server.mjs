@@ -33,7 +33,9 @@ export async function createOpenMic({ root = ROOT, dataDir, env = process.env, f
     }
     try {
       if (path === '/api' || path.startsWith('/api/')) return await api(req, res);
-      return await serveStatic({ root, pathname: path, req, res });
+      // Both the configured data directory and ./data - the development default inside the
+      // checkout - are private, so moving OPENMIC_DATA_DIR cannot reopen the leak.
+      return await serveStatic({ root, pathname: path, req, res, privateDirs: [base, join(root, 'data')] });
     } catch (error) {
       console.error('[openmic]', req.method, path, error);
       if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });

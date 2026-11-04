@@ -3,7 +3,7 @@
 // does, and so the whole data model is one readable JSON file during a review.
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 
-const EMPTY = () => ({ users: {}, sessions: {}, tracks: {}, denied: {}, notices: [], attempts: {} });
+const EMPTY = () => ({ users: {}, sessions: {}, tracks: {}, denied: {}, notices: [], attempts: {}, ytCache: {} });
 
 export function createStore(file) {
   let data = EMPTY();

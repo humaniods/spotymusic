@@ -117,6 +117,7 @@ export function createCommunityApi({ fetchImpl = globalThis.fetch, path = '' } =
       target: clean(notice.target, 300), email: clean(notice.email, 254),
       notice: clean(notice.notice, 4000), goodFaith: notice.goodFaith === true } }),
     assist: (task, input) => request('/api/assistant', { method: 'POST', body: { task: clean(task, 20), input } }),
+    fullTrack: query => request('/api/full-track?' + new URLSearchParams({ q: clean(query, 120) }).toString()),
   };
 }
 

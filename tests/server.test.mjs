@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -438,4 +438,119 @@ test('catalog search matches title, artist, handle and tag together', () => {
   assert.deepEqual(searchTracks(tracks, { genre: 'rain' }).tracks.map(t => t.id), ['1']);
   assert.equal(searchTracks(tracks, {}).total, 2, 'unpublished audio is never counted');
   assert.deepEqual(searchTracks(tracks, { query: 'ari-sound' }).tracks.map(t => t.id), ['1', '2']);
+});
+
+test('a full listen hands off to YouTube when no Data API key is configured', async () => {
+  const app = await start();
+  try {
+    const meta = await call(app.base, '/api/meta');
+    assert.equal(meta.value.fullTrack, 'link-out', 'no key means every row is a plain link out');
+    const refused = await call(app.base, '/api/full-track?q=Ari%20Monsoon');
+    assert.equal(refused.status, 501);
+    assert.match(refused.value.error, /open on YouTube instead/);
+  } finally { await app.close(); }
+});
+
+test('with a Data API key the lookup uses YouTube official search and never leaks the key', async () => {
+  const asked = [];
+  const answer = items => async url => {
+    asked.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ items }) };
+  };
+  const app = await start({
+    env: { OPENMIC_YOUTUBE_KEY: 'secret-test-key' },
+    fetchImpl: answer([{ id: { videoId: 'dQw4w9WgXcQ' }, snippet: { title: 'Ari — Monsoon (Official Video)' } }]),
+  });
+  try {
+    const meta = await call(app.base, '/api/meta');
+    assert.equal(meta.value.fullTrack, 'youtube-data-api');
+    assert.ok(!JSON.stringify(meta.value).includes('secret-test-key'), 'the key stays on the server');
+    const found = await call(app.base, '/api/full-track?q=Ari%20Monsoon');
+    assert.equal(found.status, 200);
+    assert.equal(found.value.videoId, 'dQw4w9WgXcQ');
+    assert.equal(found.value.watch, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    assert.match(asked[0], /googleapis\.com\/youtube\/v3\/search/);
+    assert.match(asked[0], /videoCategoryId=10/, 'only the music category is searched');
+    assert.match(asked[0], /maxResults=1/);
+
+    const empty = await start({ env: { OPENMIC_YOUTUBE_KEY: 'secret-test-key' }, fetchImpl: answer([]) });
+    try { assert.equal((await call(empty.base, '/api/full-track?q=nothing')).status, 404); } finally { await empty.close(); }
+    const forged = await start({ env: { OPENMIC_YOUTUBE_KEY: 'k' }, fetchImpl: answer([{ id: { videoId: '../../etc' } }]) });
+    try { assert.equal((await call(forged.base, '/api/full-track?q=Ari%20Monsoon')).status, 404, 'a bad id is refused, not embedded'); } finally { await forged.close(); }
+    const down = await start({ env: { OPENMIC_YOUTUBE_KEY: 'k' }, fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) }) });
+    try { assert.equal((await call(down.base, '/api/full-track?q=Ari%20Monsoon')).status, 502); } finally { await down.close(); }
+    assert.equal((await call(app.base, '/api/full-track')).status, 400, 'nothing to look for');
+  } finally { await app.close(); }
+});
+
+test('YouTube searches need a key, so a keyless server refuses them instead of billing nothing', async () => {
+  const app = await start();
+  try {
+    assert.equal((await call(app.base, '/api/youtube?q=Ari%20Monsoon')).status, 501);
+  } finally { await app.close(); }
+});
+
+test('the YouTube source returns full-length rows and re-uses its cache instead of the quota', async () => {
+  let upstream = 0;
+  let askedUrl = '';
+  const items = [
+    { id: { videoId: 'dQw4w9WgXcQ' }, snippet: { title: 'Monsoon (Official Video)', channelTitle: 'Ari Sound', publishedAt: '2026-01-05T00:00:00Z' } },
+    { id: { videoId: 'abc123' }, snippet: { title: 'too short an id' } },
+  ];
+  const app = await start({
+    env: { OPENMIC_YOUTUBE_KEY: 'secret-test-key' },
+    fetchImpl: async url => { upstream++; askedUrl = String(url); return { ok: true, status: 200, json: async () => ({ items }) }; },
+  });
+  try {
+    const first = await call(app.base, '/api/youtube?q=Ari%20Monsoon&limit=8');
+    assert.equal(first.status, 200);
+    assert.equal(first.value.tracks.length, 1, 'a malformed video id never becomes a row');
+    assert.equal(first.value.tracks[0].id, 'dQw4w9WgXcQ');
+    assert.equal(first.value.tracks[0].artist, 'Ari Sound');
+    assert.match(first.value.tracks[0].page, /^https:\/\/www\.youtube\.com\/watch\?v=dQw4w9WgXcQ$/);
+    assert.ok(!JSON.stringify(first.value).includes('secret-test-key'), 'the key never reaches the browser');
+    assert.match(askedUrl, /videoCategoryId=10/);
+    assert.match(askedUrl, /maxResults=8/);
+
+    const again = await call(app.base, '/api/youtube?q=ari%20monsoon&limit=8');
+    assert.equal(again.value.cached, true);
+    assert.equal(upstream, 1, 'a repeat search is served from the cache, not the quota');
+
+    const short = await call(app.base, '/api/youtube?q=a');
+    assert.equal(short.status, 400);
+    const down = await start({ env: { OPENMIC_YOUTUBE_KEY: 'k' }, fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({}) }) });
+    try { assert.equal((await call(down.base, '/api/youtube?q=Ari%20Monsoon')).status, 502); } finally { await down.close(); }
+  } finally { await app.close(); }
+});
+
+// npm start serves the project root, and the development data directory lives inside it,
+// so GET /data/db.json used to return every email, handle and password hash on disk. The
+// static handler now refuses the data directory and any dot-path.
+test('the account store, uploads and dot-files are never served as files', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'openmic-root-'));
+  await mkdir(join(dir, 'data', 'audio'), { recursive: true });
+  await writeFile(join(dir, 'data', 'db.json'), JSON.stringify({ users: { 'u-1': { email: 'ari@example.com', password: 'hunter-secret' } } }));
+  await writeFile(join(dir, 'data', 'audio', 't-secret.mp3'), 'audio-bytes');
+  await writeFile(join(dir, '.env'), 'OPENMIC_YOUTUBE_KEY=google-secret-key\n');
+  await writeFile(join(dir, 'index.html'), '<!doctype html><title>OpenMic</title>');
+  const app = await createOpenMic({ root: dir, dataDir: join(dir, 'data'), env: {}, fetchImpl: fetch });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port;
+  try {
+    const page = await call(base, '/index.html');
+    assert.equal(page.status, 200);
+    for (const path of ['/data/db.json', '/data/audio/t-secret.mp3', '/.env', '/data/']) {
+      const blocked = await call(base, path);
+      assert.equal(blocked.status, 404, path + ' must not be readable');
+      assert.ok(!JSON.stringify(blocked.value).includes('hunter-secret'));
+      assert.ok(!JSON.stringify(blocked.value).includes('google-secret-key'));
+    }
+    // The app still reaches its own modules, so the block is not a blanket 404.
+    await mkdir(join(dir, 'src'), { recursive: true });
+    await writeFile(join(dir, 'src', 'app.mjs'), 'export const app = 1;\n');
+    assert.equal((await call(base, '/src/app.mjs')).status, 200);
+  } finally {
+    await new Promise(resolve => app.server.close(resolve));
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SOURCES,openverseUrl,mapOpenverse,commonsUrl,mapCommons,radioUrl,mapRadio,
+  SOURCES,BROWSE_SOURCES,openverseUrl,mapOpenverse,commonsUrl,mapCommons,radioUrl,mapRadio,
   fetchProvider,searchAcross,reviveMultiTrack
 } from '../src/providers.mjs';
+import {
+  itunesSearchUrl,itunesChartUrl,chartEntries,mapItunesChart,mapItunesSearch,newestFirst,savedPreview,fullListenUrl
+} from '../src/itunes.mjs';
+import {youtubeRow,savedEmbed,youtubeEmbed,youtubeWatch} from '../src/youtube.mjs';
 
 const openRecord = {
   id:'6cfa5ae5-f1bd-4188-9961-71ad1454d766',title:'Golden Piano',
@@ -32,8 +36,51 @@ const jamendoRecord = {
   license:'by-nc-nd',license_version:'2.5',filetype:'mp32'
 };
 
-test('four source choices are explicit and independent',()=>{
-  assert.deepEqual(Object.keys(SOURCES),['audius','openverse','commons','radio']);
+// A real Apple chart entry: the preview URL, the track id and the release date all
+// arrive inside the feed, so discovery costs one request rather than a lookup per row.
+const chartEntry = {
+  'im:name': { label: 'Roddy Theme (From "Jailer 2")' },
+  'im:artist': { label: 'Anirudh Ravichander' },
+  'im:releaseDate': { label: '2026-10-26T07:00:00-07:00' },
+  id: {
+    label: 'https://music.apple.com/in/album/roddy-theme/6827079993?i=6827080210&uo=2',
+    attributes: { 'im:id': '6827080210' }
+  },
+  link: [
+    { attributes: { rel: 'alternate', type: 'text/html',
+      href: 'https://music.apple.com/in/album/roddy-theme-from-jailer-2/6827079993?i=6827080210&uo=2' } },
+    { 'im:duration': { label: '30000' }, attributes: { title: 'Preview', rel: 'enclosure', type: 'audio/x-m4a',
+      'im:assetType': 'preview',
+      href: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d9/b7/5a/mzaf_18389923733148569977.plus.aac.p.m4a' } }
+  ]
+};
+const itunesSearchRecord = {
+  kind: 'song', trackId: 6825791376, trackName: 'Zaalima', artistName: 'Arijit Singh & Harshdeep Kaur',
+  releaseDate: '2026-10-23T00:00:00Z', trackTimeMillis: 255008,
+  previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e7/ce/b3/mzaf_3407.plus.aac.p.m4a',
+  trackViewUrl: 'https://music.apple.com/in/album/zaalima/6825791151?i=6825791376&uo=4'
+};
+
+test('source choices are explicit and independent',()=>{
+  assert.deepEqual(Object.keys(SOURCES),['audius','openverse','commons','radio','itunes','youtube']);
+});
+
+test('YouTube never joins an unmetered fan-out',()=>{
+  assert.deepEqual([...BROWSE_SOURCES],['audius','openverse','commons','radio','itunes']);
+});
+
+test('a YouTube row is only ever an official embed of an 11-character video id',()=>{
+  const t=youtubeRow({id:'dQw4w9WgXcQ',title:'Zaalima',artist:'Arijit Singh',released:Date.parse('2023-01-01')});
+  assert.equal(t.provider,'youtube');
+  assert.equal(t.source,'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+  assert.equal(t.page,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.equal(youtubeRow({id:'short',title:'Nope'}),null);
+  assert.equal(youtubeRow({id:'dQw4w9WgXcQ',title:''}),null);
+  assert.equal(youtubeWatch('dQw4w9WgXcQ</script>'),'');
+  // A saved row rebuilds its URLs from the id alone; a tampered source field is ignored.
+  const saved=savedEmbed({id:'youtube:dQw4w9WgXcQ',title:'Zaalima',artist:'Arijit',source:'https://evil.example/x.js'});
+  assert.equal(saved.source,t.source);
+  assert.equal(savedEmbed({id:'itunes:123',title:'x'}),null);
 });
 
 test('Openverse API: anonymous, query encoded and paginated',()=>{
@@ -83,10 +130,11 @@ test('One provider failure does not hide successful free-source results',async()
     if(url.includes('api.openverse.org'))return {ok:true,json:async()=>({results:[openRecord]})};
     if(url.includes('commons.wikimedia.org'))return {ok:true,json:async()=>({batchcomplete:true,query:{pages:{a:commonsRecord}}})};
     if(url.includes('api.radio-browser.info'))return {ok:true,json:async()=>[station]};
+    if(url.includes('itunes.apple.com'))return {ok:true,json:async()=>({results:[itunesSearchRecord]})};
     return {ok:false,status:502,json:async()=>({})};
   };
   const response=await searchAcross({provider:'all',mode:'search',query:'music'},mocked);
-  assert.deepEqual(response.tracks.map(x=>x.kind),['openverse','commons','radio']);
+  assert.deepEqual(response.tracks.map(x=>x.kind),['openverse','commons','radio','itunes']);
   assert.equal(response.errors.length,1);
   assert.equal(response.errors[0].provider,'audius');
 });
@@ -136,16 +184,18 @@ test('sources report independently as they settle, not as a batch',async()=>{
       return {ok:true,json:async()=>({data:[{id:'abcd1234efgh',title:'Slow but first',user:{name:'A'}}]})};}
     if(url.includes('api.openverse.org')) return {ok:true,json:async()=>({results:[openRecord]})};
     if(url.includes('commons.wikimedia.org')) return {ok:false,status:500,json:async()=>({})};
+    if(url.includes('itunes.apple.com')) return {ok:true,json:async()=>
+      url.includes('/search') ? {results:[itunesSearchRecord]} : {feed:{entry:[chartEntry]}}};
     return {ok:true,json:async()=>[station]};
   };
   const data=await searchAcross({provider:'all',mode:'search',query:'jazz',
     onSource:({provider,tracks,error})=>order.push(provider+(error?'!':'+'+tracks.length))},mocked);
-  assert.equal(order.length,4);
-  assert.equal(new Set(order.map(x=>x.split(/[!+]/)[0])).size,4,'each source reports once');
+  assert.equal(order.length,5);
+  assert.equal(new Set(order.map(x=>x.split(/[!+]/)[0])).size,5,'each source reports once');
   assert.ok(order.includes('commons!'),order.join(','));
-  assert.ok(order[3].startsWith('audius'),order.join(','));
+  assert.ok(order.at(-1).startsWith('audius'),order.join(','));
   // the aggregate stays in declared source order regardless of who answered first
-  assert.deepEqual(data.tracks.map(t=>t.provider),['audius','openverse','radio']);
+  assert.deepEqual(data.tracks.map(t=>t.provider),['audius','openverse','radio','itunes']);
   assert.deepEqual(data.errors.map(e=>e.provider),['commons']);
 });
 
@@ -209,4 +259,130 @@ test('an empty Wikimedia result is not reported as a broken source',async()=>{
   const failed=async()=>({ok:true,json:async()=>({batchcomplete:'',error:{info:'The search query is too long'}})});
   await assert.rejects(fetchProvider('commons',{mode:'search',query:'x'},failed),/search query is too long/);
   await assert.rejects(fetchProvider('commons',{mode:'search',query:'x'},async()=>({ok:true,json:async()=>'not json'})),/Unexpected Wikimedia/);
+});
+
+test('Apple endpoints need no key and stay inside one store',()=>{
+  const search=new URL(itunesSearchUrl({query:'latest punjabi songs 2026'}));
+  assert.equal(search.origin,'https://itunes.apple.com');
+  assert.equal(search.pathname,'/search');
+  assert.equal(search.searchParams.get('media'),'music');
+  assert.equal(search.searchParams.get('entity'),'song');
+  assert.equal(search.searchParams.get('country'),'in');
+  assert.equal(search.searchParams.get('term'),'latest punjabi songs 2026');
+  assert.throws(()=>itunesSearchUrl({query:'   '}),/Search query required/);
+  assert.equal(new URL(itunesChartUrl({limit:12})).pathname,'/in/rss/topsongs/limit=12/json');
+  // The store code is a path segment, so junk must not be able to restructure the URL.
+  assert.equal(new URL(itunesChartUrl({store:'../etc',limit:5})).pathname,'/in/rss/topsongs/limit=5/json');
+  assert.equal(new URL(itunesChartUrl({limit:99999})).pathname,'/in/rss/topsongs/limit=25/json');
+});
+
+test('a chart row needs Apple’s own preview link and a real track id',()=>{
+  const row=mapItunesChart(chartEntry);
+  assert.equal(row.provider,'itunes');
+  assert.equal(row.id,'6827080210');
+  assert.match(row.source,/audio-ssl\.itunes\.apple\.com/);
+  assert.match(row.page,/music\.apple\.com\/in\/album/);
+  assert.equal(row.license,'30-sec preview · Apple');
+  assert.equal(row.released,Date.parse('2026-10-26T07:00:00-07:00'));
+  // No preview enclosure means Apple offers no free clip: drop the row instead of
+  // listing a song the player then cannot load.
+  assert.equal(mapItunesChart({...chartEntry,link:[chartEntry.link[0]]}),null);
+  assert.equal(mapItunesChart({...chartEntry,id:{attributes:{}}}),null);
+  assert.equal(mapItunesChart({...chartEntry,'im:name':{label:'  '}}),null);
+  // A feed can hold a single entry as a bare object rather than a list.
+  assert.equal(chartEntries({feed:{entry:chartEntry}}).length,1);
+  assert.deepEqual(chartEntries({feed:{}}),[]);
+});
+
+test('a search result without a preview is metadata, not a song',()=>{
+  const row=mapItunesSearch(itunesSearchRecord);
+  assert.equal(row.id,'6825791376');
+  assert.equal(row.title,'Zaalima');
+  assert.equal(row.artist,'Arijit Singh & Harshdeep Kaur');
+  assert.match(row.page,/music\.apple\.com/);
+  assert.equal(mapItunesSearch({...itunesSearchRecord,previewUrl:''}),null);
+  assert.equal(mapItunesSearch({...itunesSearchRecord,kind:'album'}),null);
+  assert.equal(mapItunesSearch({...itunesSearchRecord,trackId:''}),null);
+});
+
+test('newest release leads New releases while Popular keeps chart order',async()=>{
+  const older={...chartEntry,
+    id:{label:'https://music.apple.com/in/album/old/1?i=1111111111&uo=2',attributes:{'im:id':'1111111111'}},
+    'im:releaseDate':{label:'2020-01-01T05:00:00-07:00'}};
+  const feed=async()=>({ok:true,json:async()=>({feed:{entry:[older,chartEntry]}})});
+  assert.deepEqual((await fetchProvider('itunes',{mode:'latest'},feed)).map(t=>t.id),
+    ['itunes:6827080210','itunes:1111111111']);
+  assert.deepEqual((await fetchProvider('itunes',{mode:'trending'},feed)).map(t=>t.id),
+    ['itunes:1111111111','itunes:6827080210']);
+  const searched=async()=>({ok:true,json:async()=>({results:[itunesSearchRecord]})});
+  const rows=await fetchProvider('itunes',{mode:'search',query:'zaalima'},searched);
+  assert.equal(rows[0].kind,'itunes');
+  assert.equal(rows[0].source,itunesSearchRecord.previewUrl);
+  await assert.rejects(fetchProvider('itunes',{mode:'latest'},async()=>({ok:true,json:async()=>({results:[]} )})),
+    /Unexpected Apple chart/);
+  assert.deepEqual(newestFirst([{released:1},{released:9},null,{released:9}]).length,3);
+});
+
+test('an Apple preview aimed at a private address never reaches the player',async()=>{
+  const evil={...chartEntry,link:[chartEntry.link[0],
+    {attributes:{rel:'enclosure',type:'audio/x-m4a','im:assetType':'preview',
+      href:'http://169.254.169.254/latest/meta-data/x.m4a'}}]};
+  const rows=await fetchProvider('itunes',{mode:'trending'},
+    async()=>({ok:true,json:async()=>({feed:{entry:[evil,chartEntry]}})}));
+  assert.deepEqual(rows.map(r=>r.id),['itunes:6827080210']);
+});
+
+test('a saved Apple favorite is rebuilt against Apples own host only',()=>{
+  const row=mapItunesChart(chartEntry);
+  const saved={id:'itunes:'+row.id,kind:'itunes',title:row.title,artist:row.artist,
+    source:row.source,page:row.page,license:row.license};
+  assert.equal(reviveMultiTrack(saved).source,row.source);
+  assert.equal(reviveMultiTrack({...saved,source:'https://evil.example/stolen.m4a'}),null);
+  assert.equal(savedPreview({...saved,source:'https://audio-ssl.itunes.apple.com/a.m4a'}),
+    'https://audio-ssl.itunes.apple.com/a.m4a');
+  assert.equal(savedPreview({...saved,source:'http://audio-ssl.itunes.apple.com/a.m4a'}),null);
+});
+
+test('the full listen hands an Apple preview to YouTubes own public search',()=>{
+  assert.equal(fullListenUrl('Monsoon Lofi','Ari Sound'),
+    'https://www.youtube.com/results?search_query=Monsoon%20Lofi%20Ari%20Sound%20song');
+  assert.ok(fullListenUrl('Saajna','Ari & Co').includes('Saajna%20Ari%20%26%20Co%20song'),'symbols are encoded, not injected');
+  assert.ok(!fullListenUrl('Ari',null).includes('null'),'a missing artist is skipped, not spelled out');
+  assert.equal(fullListenUrl('',''),'','nothing to search for means no link');
+  assert.ok(fullListenUrl('x'.repeat(200),'y'.repeat(90)).length<220,'the handed-off term stays bounded');
+});
+
+test('YouTube rows come back from our own server and are pinned to the embed host',async()=>{
+  const asked=[];
+  const mocked=async url=>{
+    asked.push(String(url));
+    return {ok:true,json:async()=>({tracks:[
+      {id:'dQw4w9WgXcQ',title:'Monsoon (Official Video)',artist:'Ari Sound',
+        page:'https://evil.example/steal',source:'javascript:alert(1)',license:'Full-length video'}
+    ]})};
+  };
+  const rows=await fetchProvider('youtube',{mode:'search',query:'Ari Monsoon',limit:8},mocked);
+  assert.equal(rows[0].id,'youtube:dQw4w9WgXcQ');
+  assert.equal(rows[0].kind,'youtube');
+  assert.equal(rows[0].source,'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+  assert.equal(rows[0].page,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.match(asked[0],/\/api\/youtube\?q=Ari\+Monsoon&limit=8$/,'searched through the server, never with a key in the browser');
+  assert.ok(!asked[0].includes('googleapis'));
+});
+
+test('YouTube is not asked for anything outside a named search',async()=>{
+  const never=async()=>{throw new Error('a browse mode must not bill the search quota');};
+  for(const mode of ['latest','trending'])
+    assert.deepEqual(await fetchProvider('youtube',{mode,query:'Ari'},never),[]);
+  await assert.rejects(fetchProvider('youtube',{mode:'search',query:'   '},never),/Search query required/);
+});
+
+test('a saved YouTube favorite is rebuilt from its video id only',()=>{
+  const saved={id:'youtube:dQw4w9WgXcQ',kind:'youtube',title:'Monsoon',artist:'Ari Sound',
+    source:'https://evil.example/x.js',page:'https://evil.example/x.html',license:'Full-length video'};
+  const row=reviveMultiTrack(saved);
+  assert.equal(row.source,'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+  assert.equal(row.page,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.equal(reviveMultiTrack({...saved,id:'youtube:tooshort'}),null);
+  assert.equal(reviveMultiTrack({...saved,id:'spotify:dQw4w9WgXcQ'}),null);
 });

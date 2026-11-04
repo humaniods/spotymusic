@@ -2,7 +2,7 @@
 
 A responsive, local-first, **MIT-licensed** music app that does two jobs:
 
-1. **For listeners** — search four free-to-access music catalogs, play internet radio, import your own audio files, keep likes and playlists, all with no account, no checkout, no premium tier.
+1. **For listeners** — search six free-to-access music sources (five keyless catalogs, plus YouTube when the server holds a free key), play internet radio, import your own audio files, keep the open ones on the device so they replay with no network, keep likes and playlists, all with no account, no checkout, no premium tier.
 2. **For independent artists** — open a profile, upload recordings you actually own, and have them streamed from *your own* server to everyone on the **Community** screen. YouTube's publishing model, Spotify's listening model, one dependency-free codebase.
 
 ![OpenMic home screen](./docs/assets/home-screen.svg)
@@ -13,7 +13,7 @@ A responsive, local-first, **MIT-licensed** music app that does two jobs:
 
 ## Use cases
 
-Six things a real person can do end to end today. Each was click-through verified in a browser, and the parts a headless test can reach are covered by the suite.
+Seven things a real person can do end to end today. Each was click-through verified in a browser, and the parts a headless test can reach are covered by the suite.
 
 | # | Who | Wants | Path in the app | Works today |
 | --- | --- | --- | --- | --- |
@@ -21,14 +21,37 @@ Six things a real person can do end to end today. Each was click-through verifie
 | 2 | Independent artist | Publish my own songs | **For artists** → sign up → profile → upload file → accept rights warranty → publish | Yes |
 | 3 | Fan / A&R | Find artists by mood, not just by name | **Community** → describe a mood → *Ask the assistant* → search rewritten into catalog terms | Yes |
 | 4 | Crate digester / DJ | My files, radio and open catalogs in one library | Drag audio anywhere, or *Add audio files* → likes, playlists, queue, shuffle/repeat | Yes |
-| 5 | Rightsholder | Get an infringing upload removed | Flag the row (or the Community disclaimer) → complete the notice → file deleted, fingerprint denylisted, strike recorded | Yes |
-| 6 | Operator | Run this on my own box | `npm start` with `PORT` / `OPENMIC_HOST` / `OPENMIC_DMCA_EMAIL` → nothing else to provision | Yes |
+| 5 | Listener on a train / no data | Hear again what I already heard | Tap the download arrow on a keepable row → **Offline** → it plays with the network off and the server unreachable | Yes |
+| 6 | Rightsholder | Get an infringing upload removed | Flag the row (or the Community disclaimer) → complete the notice → file deleted, fingerprint denylisted, strike recorded | Yes |
+| 7 | Operator | Run this on my own box | `npm start` with `PORT` / `OPENMIC_HOST` / `OPENMIC_DMCA_EMAIL` → nothing else to provision | Yes |
 
 ### 1 · A listener discovers music without a subscription
 
-Open **Free Music**, choose *All 4 sources* or one provider, and search. The four APIs are queried in parallel and **each source renders as it settles**, so a slow or rate-limited provider never blanks the page — its state shows in the status line instead. Every row carries its provider, a credit link, and the licence or attribution the provider reported. Radio rows are marked **LIVE** and disable seeking, because a live broadcast has no position to seek to.
+Open **Free Music**, choose *All sources* or one provider, and search. They are queried in parallel and **each source renders as it settles**, so a slow or rate-limited provider never blanks the page — its state shows in the status line instead. Every row carries its provider, a credit link, and the licence or attribution the provider reported. Radio rows are marked **LIVE** and disable seeking, because a live broadcast has no position to seek to.
 
-![Free Music screen and the four-source fan-out](./docs/assets/free-music-screen.svg)
+**Apple Music is the source that answers "what's the newest song?"** *New releases* reads Apple's public chart feed, which labels a release date on every track, and shows the newest first — the day's film singles and fresh international releases sit at the top without anyone searching for them. Search hits the same keyless endpoint by name, artist or album. Each Apple row streams Apple's **own 30-second preview from Apple's own CDN** and credits Apple's track page, and then offers **Full track**, because thirty seconds is not a song. That control is a handoff, not a workaround: it goes to YouTube, which is where the rest of that recording actually lives.
+
+- **With no configuration (default).** *Full track* opens YouTube's own public search results for that exact title and artist. No key, no account, no quota, and because it is a search rather than a catalog we claim to hold, it works for Hindi, Tamil, Punjabi, Spanish or Swedish equally. The listener lands on the official video and plays it under YouTube's rules.
+- **With `OPENMIC_YOUTUBE_KEY` set (optional, free).** `GET /api/full-track` asks **YouTube Data API v3** — Google's documented search endpoint, restricted to the Music category — for one video id, and the same click then plays that video in OpenMic's side panel through YouTube's official embed, so YouTube still controls playback, ads and availability. The key stays on the server; `/api/meta` only reports which tier is live.
+
+The same key also turns **YouTube into a sixth source**. A named search then returns full-length videos next to the Apple clips, and pressing play on one opens YouTube's official embed in the side panel — no audio bytes ever pass through OpenMic. Two things keep that affordable: it only joins a *named* search (browsing the Apple chart or a radio directory costs nothing), and results are cached server-side for six hours, so the hundredth listener for a song costs the same one search as the first.
+
+What OpenMic never does is ask either company for something it has not offered: no Apple stream beyond the published clip, and no YouTube private/player endpoint.
+
+![Free Music screen and the multi-source fan-out](./docs/assets/free-music-screen.svg)
+
+#### Turning the YouTube tier on (free, about five minutes)
+
+1. Open <https://console.cloud.google.com> and create a project (any name, e.g. `openmic`).
+2. **APIs & Services → Library**, search **YouTube Data API v3**, press *Enable*. That is the only API OpenMic uses.
+3. **APIs & Services → Credentials → Create credentials → API key**. A browser key needs no OAuth consent screen.
+4. Press *Restrict key* and allow only the **YouTube Data API v3**. Leave the HTTP-referrer box empty — the key is called from your server, not from the page.
+5. Copy it to the machine that runs OpenMic and start the server with it:
+   ```bash
+   OPENMIC_YOUTUBE_KEY=AIza... npm start
+   ```
+   Never put it in a file that gets committed; `curl http://127.0.0.1:5173/api/meta | grep fullTrack` should then answer `youtube-data-api`.
+6. The free quota is **10,000 units a day and a search costs 100**, so about **100 searches a day** across every listener on that server. OpenMic budgets **90** and answers `429` for the rest until the day rolls over; the per-listener limits and the six-hour cache sit in front of that. When you want more, the same console page shows the live usage curve.
 
 ### 2 · An artist publishes their own recording
 
@@ -56,15 +79,23 @@ Two modes, one interface:
 
 ### 4 · Your own files, radio and open tracks in one library
 
-Drop audio anywhere in the window, or use *Add audio files*. Imported files live in browser **IndexedDB** and never upload anywhere; likes, playlists, saved links and stream metadata live in **localStorage** under `openmic:v1:*`. Track ids are namespaced (`demo:`, `local:`, `track:`, `playlist:`, `audius:`, `openverse:`, `commons:`, `radio:`, `community:<id>`) so a local file, a radio station and an artist upload can coexist in one queue. Pasting a Spotify link keeps using Spotify's official embeddable player under Spotify's own rules — OpenMic never touches that audio.
+Drop audio anywhere in the window, or use *Add audio files*. Imported files live in browser **IndexedDB** and never upload anywhere; likes, playlists, saved links and stream metadata live in **localStorage** under `openmic:v1:*`. Track ids are namespaced (`demo:`, `local:`, `track:`, `playlist:`, `audius:`, `openverse:`, `commons:`, `radio:`, `itunes:`, `youtube:`, `community:<id>`) so a local file, a radio station and an artist upload can coexist in one queue. Pasting a Spotify link keeps using Spotify's official embeddable player under Spotify's own rules — OpenMic never touches that audio.
 
-### 5 · A rightsholder gets a recording taken down
+### 5 · A song heard once plays again with no signal
+
+Any row whose audio actually reached the browser — Audius, Openverse, Wikimedia Commons, artist uploads from this server, and files you imported — carries a download arrow. It fetches the recording once, checks it is really audio (not an HTML page from a captive portal), and stores the bytes in **IndexedDB** under `openmic-offline`. The **Offline** screen then lists what is on the device with a usage meter against a 512 MB cap; a single recording is refused above 100 MB so one lossless rip cannot wipe the rest. When the cap is reached, the least-listened copy is dropped — never the track that is playing, never the one you just asked for, and if the room cannot be made the save is refused instead of quietly deleting something else.
+
+Playback prefers the disk over the network: a saved copy plays from a `blob:` URL even while the wifi is on, so the same file is not fetched twice, and with the server unreachable OpenMic still opens (a service worker caches the app's own files — never `/api`, never a provider's audio, never an embed frame) and still plays what you kept. A row whose copy is missing falls back to streaming with a toast rather than failing silently. The shell is served cache-first and refreshed in the background, which is what keeps a cold start with no signal working; the cost is that a deploy reaches a device on the visit after the one that downloads it.
+
+There is deliberately no save button on Spotify, YouTube, Apple-preview or radio rows: those bytes are played by the provider's own player and never arrive here, so storing them would mean capturing someone else's stream.
+
+### 6 · A rightsholder gets a recording taken down
 
 Anyone — anonymously — can flag a Community row or use the disclaimer link. A vague notice is rejected; a valid one must state the work, its location, contact details and a good-faith statement. On acceptance the recording is deleted immediately (metadata *and* audio file), its **SHA-256 fingerprint is denylisted** so it cannot come back through another account, the confirmation prints the agent address a counter-notice goes to, and the notice counts as a strike. **Two notices terminate the account**: remaining tracks are removed, sessions are dropped and the handle can no longer sign in. An artist deleting *their own* upload is not a strike and does not poison the fingerprint, so the same take can be re-uploaded.
 
 ![Rights lifecycle: publish, listen, notice, removal, strike](./docs/assets/rights-lifecycle.svg)
 
-### 6 · An operator runs it
+### 7 · An operator runs it
 
 One process, no dependencies, no database service:
 
@@ -78,10 +109,12 @@ Accounts, track metadata and audio are written to `./data/` (git-ignored, direct
 
 ---
 
-## Music sources (four open catalogs + artist uploads)
+## Music sources (six sources + artist uploads)
 
 | Provider | What is available | Mode | API / licence information |
 | --- | --- | --- | --- |
+| [Apple / iTunes](https://performance-partners.apple.com/search-api) | **Newest commercial releases** plus any named song, artist or album; **Full track** hands the rest to YouTube | **30-second preview**, served by Apple from `audio-ssl.itunes.apple.com` | Keyless public Search + RSS chart endpoints, `access-control-allow-origin: *`; each row links to its `music.apple.com` page |
+| [YouTube](https://developers.google.com/youtube/v3/docs/search/list) | Any named song or artist as **full-length videos**, searched through our own server | **Official embed** (`youtube-nocookie.com`), played by YouTube in the side panel | Free **YouTube Data API v3** key (`OPENMIC_YOUTUBE_KEY`), Music category only, ~100 searches/day, 6-hour cache; unkeyed servers simply do not show the source |
 | [Audius](https://docs.audius.co/api/) | Artist-uploaded tracks, newest and trending | On-demand, source-authorized stream | Public read API; not all uploads are freely streamable |
 | [Openverse](https://api.openverse.org/v1/) | Indexed Creative Commons and public-domain audio | Direct stream if the original URL works | Anonymous rate-limited REST search; each result carries its own attribution |
 | [Wikimedia Commons](https://www.mediawiki.org/wiki/API:Cross-site_requests) | Freely licensed / public-domain files | Direct streaming from Commons | MediaWiki CORS API; per-file licence on its file page |
@@ -89,6 +122,8 @@ Accounts, track metadata and audio are written to `./data/` (git-ignored, direct
 | **OpenMic artist uploads** | Recordings published through **For artists** | On-demand, from your own server at `/api/stream/<id>` | Gated by a per-file rights warranty; every row links to the uploading artist |
 
 **The app's MIT licence covers app code, not externally hosted music.** Attribution and redistribution rules vary by provider, and not all of them permit downloading or reusing a track. Listening to a public broadcast does not give anyone permission to record or redistribute it.
+
+**Which rows can be kept offline.** Audius, Openverse, Wikimedia Commons and artist uploads hand their bytes to the browser, so they can be saved to the device and replayed with no network. Apple's preview, Spotify and YouTube embeds, and live radio do not — OpenMic stores nothing it does not receive, and has no control over their DRM, byte ranges or terms.
 
 ## Architecture
 
@@ -112,6 +147,7 @@ The catalog problem cannot be solved honestly by an app this size. Nearly everyt
 | Renaming a profile left stale credits | Published rows kept crediting an abandoned name | `PATCH /api/profile` re-credits that artist's tracks |
 | Assistant missed remixes | "A remix of a Bollywood song" raised no flag | Remix rule added alongside sample, cover, type-beat, label and streaming-link rules |
 | Stale app after every deploy | `python3 -m http.server` sent no `Cache-Control`, so browsers kept running an old `app.mjs` | `no-cache` + ETag for app files, `immutable` for audio — `server/static.mjs` |
+| Nothing played without a connection | Every row needed the provider's servers up, even one you had already listened to | Download arrow on keepable rows → IndexedDB copies with a 512 MB cap, LRU eviction and a `blob:`-first player, plus a service worker so the app itself opens offline — `src/library.mjs`, `sw.js` |
 | Server errors shown twice-escaped | `&amp;quot;` in the UI | Single-escape path fixed — `7b96fde` |
 | Account store world-readable | `db.json` with password hashes in a shared worktree | Directory `0700`, file `0600`, git-ignored, `data/` never committed |
 | Most of one stylesheet was dead | One unterminated `.row-remove` rule made the browser nest the rest of `styles.css` inside it, so the row grid, `.danger`, `.playlist-options` and `.row-remove` never applied | Repaired while theming — `32c25f7` |
@@ -121,15 +157,17 @@ The catalog problem cannot be solved honestly by an app this size. Nearly everyt
 Stated plainly, because the interesting part of this project is where it stops.
 
 **Legal and catalog**
-- **No commercial catalog.** No Bollywood/Punjabi/Hindi/Western blockbusters on release day. Open catalogs hold open music; that is the ceiling, and no amount of code changes it without breaking the law.
-- **No DRM removal, no private or reversed APIs, no scraping, no re-hosting of streams.** Spotify playback means Spotify's official embed, full stop.
+- **Commercial releases are previewable in-app, full only on someone else's player.** Apple's public endpoints give OpenMic the whole commercial catalog — newest-first releases, any song by name — but what Apple publishes for free is a **30-second preview**. The *Full track* control does not fill that gap inside OpenMic, it hands the listener to YouTube: a public search link by default, an official embed via Data API v3 when a key is configured — and with that key the same API adds YouTube as a searchable source, so full-length videos appear among the results and play in the side panel. Either way the recording is played by YouTube, under YouTube's rules, and OpenMic only ever receives a video id. A 30-sec clip is the ceiling anyone can reach without a licence; an app that offers more in-process is serving audio nobody cleared.
+- **No DRM removal, no private or reversed APIs, no scraping, no re-hosting of streams.** Spotify playback means Spotify's official embed, full stop. The same rule is why this project does *not* play commercial songs through YouTube's undocumented `youtubei/v1/player` endpoint with a spoofed client, even though that trick exists in open-source players and would have made the catalog look complete: it evades an access control, and the audio it returns is not ours to stream. The *Full track* control exists precisely so the in-app player stops at that line — the documented search API returns an id and YouTube's own embed plays it, so Google decides what the listener can see.
 - **No composition licensing.** OpenMic does not obtain mechanical licences (US MLC) and does not implement EU Art. 17 upload filtering. Covers need the artist's own licence — which is exactly what the warranty and the assistant's cover/sample/remix warnings exist to say.
 - **`OPENMIC_DMCA_EMAIL` ships as `dmca@openmic.invalid`.** A placeholder is not a designated agent. Fix it before going public.
 
 **Technical**
 - **Codec support is the browser's,** not ours: no server-side transcoding, so a valid-but-unplayable file stays unplayable.
 - **Live radio cannot be seeked,** has no duration, and can drop at any time.
+- **Offline copies are browser storage, not a protected vault.** They sit in IndexedDB under this origin, and OpenMic asks the browser to persist them (`navigator.storage.persist()`) before the first write. The browser decides: a fresh origin with no engagement can answer `false`, in which case the copies are still stored but are evictable under disk pressure. Nothing here defeats that, and nothing is downloaded that the app never received — Spotify, YouTube, Apple previews and radio have no save control at all.
 - **Search is substring matching** across title, artist, handle, genre and tags — not fuzzy, not semantic, no embeddings, no recommendations engine, no follow feed.
+- **The YouTube tier is metered by Google, not by us.** A search costs 100 of 10,000 free units a day, so one server answers roughly 100 YouTube searches a day for all its listeners combined; OpenMic budgets 90 and says so plainly with a `429` until the day rolls over. The other five sources have no such ceiling and keep working at any volume.
 - **Single-node JSON store.** No scale-out, no replicas, no backup tooling, and rate-limit counters live in that one process. Fine for a personal or community instance; not built for traffic.
 - **No password reset, no email verification, no OAuth, no 2FA** — deliberately, since all four need an email or identity provider, which would break the zero-dependency promise. Losing a password means making a new account.
 - **No admin dashboard.** Takedowns are enforced by the API and the file store; whoever runs an instance reads the confirmations.
@@ -139,15 +177,15 @@ Stated plainly, because the interesting part of this project is where it stops.
 
 ## Security model in one paragraph
 
-Salted `scrypt` (N=16384) password hashes, never logged in clear text. Sessions are random tokens in an `HttpOnly`, `SameSite=Lax` cookie of which only the SHA-256 digest is stored, so a leaked data file cannot revive a login. Writes require the `x-openmic-request: 1` marker (CSRF). Per-IP limits: signup 10/hr, login 8 per 15 min, takedown 10/hr, assistant 60/min signed-in and 20/min anonymous. Static serving is path-jailed to the project root. Email is never returned by any route except `/api/session` to its own owner.
+Salted `scrypt` (N=16384) password hashes, never logged in clear text. Sessions are random tokens in an `HttpOnly`, `SameSite=Lax` cookie of which only the SHA-256 digest is stored, so a leaked data file cannot revive a login. Writes require the `x-openmic-request: 1` marker (CSRF). Per-IP limits: signup 10/hr, login 8 per 15 min, takedown 10/hr, full-track lookups 60/min signed-in and 20/min anonymous, YouTube searches 20/min signed-in and 6/min anonymous with a 90-search/day budget shared by the whole server, assistant 60/min signed-in and 20/min anonymous. Static serving is path-jailed to the project root. Email is never returned by any route except `/api/session` to its own owner.
 
 ## Tests
 
 ```bash
-npm test           # 60 tests, no network access
+npm test           # 86 tests, no network access
 ```
 
-`node --test tests/*.test.mjs` over six files: `core` (state, storage, queue), `providers` (adapters, filtering, backoff), `audius` (catalog, stream URLs, attribution safety), `community` (browser client, id normalisation), `demo-audio` (WAV fixture validity), `server` (boots the real server on an ephemeral port with a temporary data dir and drives every route, including uploads, Range reads, takedowns, strikes and the assistant). CI runs `node --check` across every module plus this suite on each push.
+`node --test tests/*.test.mjs` over seven files: `core` (state, storage, queue), `providers` (all six adapters, Apple's preview-only rule, newest-first ordering and the YouTube handoff, the embed-only YouTube row, filtering, backoff), `audius` (catalog, stream URLs, attribution safety), `community` (browser client, id normalisation), `demo-audio` (WAV fixture validity), `library` (what may be kept, the byte cap and least-listened eviction, record shape, blob round-trip through a fake IndexedDB), `server` (boots the real server on an ephemeral port with a temporary data dir and drives every route, including uploads, Range reads, takedowns, strikes, the assistant, and the keyed/keyless full-track and YouTube-source lookups with their cache and quota). CI runs `node --check` across every module plus this suite on each push.
 
 ## Configuration
 
@@ -158,18 +196,20 @@ npm test           # 60 tests, no network access
 | `OPENMIC_DMCA_EMAIL` | `dmca@openmic.invalid` | Designated-agent contact shown on notices |
 | `OPENMIC_DATA_DIR` | `./data` | Account store + uploaded audio (git-ignored) |
 | `OPENMIC_AI_KEY` / `_MODEL` / `_BASE_URL` | unset | Optional model proxy for the assistant |
+| `OPENMIC_YOUTUBE_KEY` | unset | Optional free YouTube Data API v3 key: adds YouTube as a searchable source and plays the full recording in-app instead of linking out |
 
 The static player also runs on any plain file server (`npm run static`): Free Music, local files and Spotify embeds keep working, and the artist screens report "No OpenMic server is answering".
 
 ## Privacy
 
-Imported local songs stay in browser IndexedDB. Favorites, playlists, saved links and stream metadata stay in browser localStorage. Free-source streams are fetched from the upstream providers, who receive ordinary requests from you. Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`. Nothing goes to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment collection, no ads.
+Imported local songs stay in browser IndexedDB. Favorites, playlists, saved links and stream metadata stay in browser localStorage. Offline copies you asked for stay in browser IndexedDB too (`openmic-offline`), on this device only — nothing indexes them, syncs them or uploads them, and removing one deletes both its row and its bytes. Free-source streams are fetched from the upstream providers, who receive ordinary requests from you, and an Apple row's *Full track* control sends that song's title and artist to YouTube — as a public search URL from your browser, or as one server-side Data API lookup when a key is configured. A YouTube search does the same: the words you typed go to Google, and the video then plays from Google's own player. Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`. Nothing goes to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment collection, no ads.
 
 ## Code map
 
-- `src/app.mjs` — player, queues, local files, favorites, playlists, play-failure handling
+- `src/app.mjs` — player, queues, local files, favorites, playlists, offline save/replay, play-failure handling
 - `src/core.mjs` / `src/dialogs.mjs` — state and storage helpers, shared confirm dialog
-- `src/free-catalog.mjs` / `src/providers.mjs` / `src/audius.mjs` — source selector, multi-source aggregation, adapters
+- `src/library.mjs` / `sw.js` — what may be kept offline, the IndexedDB stores and eviction plan, and the app-shell cache the browser serves with no network
+- `src/free-catalog.mjs` / `src/providers.mjs` / `src/audius.mjs` / `src/itunes.mjs` — source selector, multi-source aggregation, adapters
 - `src/community-api.mjs` / `src/artist.mjs` — artist client and screens, community catalog, takedown dialog
 - `src/demo-audio.mjs` — synthesises structurally valid WAV fixtures
 - `src/styles.css` / `src/artist.css` / `src/free-music.css` — glass theme tokens and per-screen layers
