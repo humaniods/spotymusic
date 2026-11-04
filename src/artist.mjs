@@ -4,6 +4,7 @@
 import { communityApi, normalizeCommunityTrack } from './community-api.mjs';
 import { askConfirm } from './dialogs.mjs';
 import { safeFile, escapeHtml } from './core.mjs';
+import { offlinePill } from './library.mjs';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => escapeHtml(value ?? '');
@@ -59,7 +60,10 @@ function communityRow(track) {
     '<button class="row-play" data-action="play" data-id="' + id + '" aria-label="Play ' + title + '"><svg><use href="#i-play"/></svg></button>' +
     '<div class="track-cover free-cover"><span>♫</span></div>' +
     '<div class="free-track-details"><div class="track-title">' + title + '</div>' +
-      '<div class="track-artist">' + esc(track.artist) + (track.genre ? ' · ' + esc(track.genre) : '') + '</div>' + credit + '</div>' +
+      '<div class="track-artist">' + esc(track.artist) + (track.genre ? ' · ' + esc(track.genre) : '') + '</div>' + credit +
+      // An artist upload is served by this very server, so keeping a copy of it is the
+      // one offline case where both sides of the transaction agreed to it.
+      offlinePill(id) + '</div>' +
     '<div class="track-kind">ARTIST UPLOAD</div>' +
     '<button class="icon-button row-like" data-action="like" data-id="' + id + '" title="Like" aria-label="Like ' + title + '"><svg><use href="#i-heart"/></svg></button>' +
     '<button class="icon-button row-add" data-action="add" data-id="' + id + '" title="Add to playlist" aria-label="Add ' + title + ' to playlist"><svg><use href="#i-plus"/></svg></button>' +

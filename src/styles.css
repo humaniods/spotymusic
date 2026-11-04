@@ -47,3 +47,32 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-grad
 .playlist-options input{accent-color:var(--green);width:15px;height:15px}
 .playlist-options span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .playlist-empty{color:#87918e;font-size:11px;line-height:1.6;margin:0 0 14px}
+.row-full{font-size:10px;letter-spacing:.5px;font-weight:800;color:#b6ff52;background:#1c2519;border:1px solid #3c5233;border-radius:999px;padding:7px 10px;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer;flex:none}
+.row-full:hover{background:#26361f;color:#dcffc8}
+/* Below 1220px the right-hand panel folds away, so an embed left floating in it would be
+   invisible and clicking a full-length row would look like nothing happened. Between 761
+   and 1220px the player becomes a floating panel over the main column instead; under
+   760px the older mobile rule below still takes over. */
+@media(min-width:761px) and (max-width:1220px){
+  .rightbar.embed-active{display:block;position:fixed;z-index:6;left:50%;transform:translateX(-50%);right:auto;bottom:108px;width:min(560px,calc(100vw - 24px));height:auto;max-height:60vh;overflow-y:auto;padding:12px 15px;border-radius:14px;border:1px solid #5a7450;box-shadow:0 12px 50px #000d;background:#151a1c}
+  .rightbar.embed-active .right-cover,.rightbar.embed-active h3,.rightbar.embed-active>p,.rightbar.embed-active .right-info,.rightbar.embed-active .quick-tips,.rightbar.embed-active .rightbar-head{display:none}
+  .rightbar.embed-active .embed-container{margin:0}
+  .rightbar.embed-active .embed-container iframe{height:240px}
+}
+/* The offline library. Each row carries both states of its save control and CSS picks
+   which one shows, so the three screens that draw rows never have to know what is on disk. */
+.row-offline .ic-done{display:none}
+.row-offline.saved{color:var(--green)}
+.row-offline.saved .ic-save{display:none}
+.row-offline.saved .ic-done{display:block}
+.row-offline.busy{opacity:.45}
+.row-offline .off-saved{display:none}
+.row-offline.saved .off-save{display:none}
+.row-offline.saved .off-saved{display:inline}
+.row-offline.saved{border-color:#4f6b3f;color:#dcffc8}
+.offline-meter{display:flex;align-items:center;gap:14px;margin:0 0 12px}
+.offline-bar{flex:1;height:6px;background:#22292b;border-radius:999px;overflow:hidden;max-width:340px}
+.offline-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7fb63c,var(--green));border-radius:999px;transition:width .2s}
+/* The save control is a real button rather than an empty slot, so the mobile row needs a
+   column for it instead of dropping the last control onto a second line. */
+@media(max-width:760px){.track-item{grid-template-columns:18px 41px minmax(0,1fr) 24px 24px 24px}}

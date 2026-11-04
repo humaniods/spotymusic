@@ -44,8 +44,20 @@ export function resolveFile(root, pathname) {
     return null;
   }
   if (decoded.includes('\0')) return null;
+  // A segment like .env or .git is never part of the app, and it is exactly where an
+  // operator keeps the YouTube key, so refusing dot-segments closes the common leak.
+  if (decoded.split('/').some(segment => segment.startsWith('.'))) return null;
   const absolute = resolve(root, '.' + (decoded === '/' ? '/index.html' : decoded));
   return absolute.startsWith(resolve(root) + '/') ? absolute : null;
+}
+
+// The account store and the uploads live under the checkout unless OPENMIC_DATA_DIR says
+// otherwise, so the serving root and the private directory can be the same tree. Only
+// /api/* may read from there; a plain GET /data/db.json used to hand back every email and
+// password hash in the file.
+export function isUnder(absolute, dir) {
+  const base = resolve(dir);
+  return absolute === base || absolute.startsWith(base + '/');
 }
 
 function notFound(res) {
@@ -53,9 +65,10 @@ function notFound(res) {
   res.end('Not found');
 }
 
-export async function serveStatic({ root, pathname, req, res }) {
+export async function serveStatic({ root, pathname, req, res, privateDirs = [] }) {
   let target = resolveFile(root, pathname);
   if (!target) return notFound(res);
+  if (privateDirs.some(dir => isUnder(target, dir))) return notFound(res);
   try {
     if ((await stat(target)).isDirectory()) target = resolve(target, 'index.html');
   } catch {
