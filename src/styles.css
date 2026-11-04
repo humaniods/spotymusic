@@ -76,3 +76,6 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-grad
 /* The save control is a real button rather than an empty slot, so the mobile row needs a
    column for it instead of dropping the last control onto a second line. */
 @media(max-width:760px){.track-item{grid-template-columns:18px 41px minmax(0,1fr) 24px 24px 24px}}
+/* The library search box cannot reach the catalog, so the bridge to it sits directly under
+   the box rather than leaving a name and a dead "0 results" on screen together. */
+.catalog-bridge{margin:14px 0 0}

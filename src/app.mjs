@@ -123,6 +123,11 @@ function renderPage(){
   } else if(state.page==='search'){
     $('#search-panel').classList.remove('hidden');
     const items=searchItems(searchableItems(),state.query);$('#search-count').textContent=`${items.length} result${items.length===1?'':'s'}`;renderRows('#search-results',items,'Nothing matched your search');
+    // This screen only knows what the listener already saved, so a name from outside the
+    // library is handed to the catalog instead of dying at "0 results".
+    const bridge=$('#search-catalog');const wanted=state.query.trim();
+    bridge.classList.toggle('hidden',wanted.length<2);
+    bridge.querySelector('span').textContent=`Search the free sources for “${wanted.slice(0,48)}”`;
   } else if(state.page==='free'){
     $('#free-panel').classList.remove('hidden');
   } else if(state.page==='community'){
@@ -469,6 +474,12 @@ function events(){
   $('#playlist-save').addEventListener('click',savePlaylistChoice);
   $('#playlist-new').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();savePlaylistChoice();}});
   $('#search-input').addEventListener('input',event=>{state.query=event.target.value;renderPage();$('#search-input').focus();$('#search-input').setSelectionRange(state.query.length,state.query.length);});
+  $('#search-catalog').addEventListener('click',()=>{
+    const wanted=state.query.trim();if(!wanted)return;
+    navigate('free');
+    const freeInput=$('#free-query');freeInput.value=wanted.slice(0,100);
+    freeInput.closest('form').requestSubmit();
+  });
   $('#toggle-play').addEventListener('click',async()=>{if(!state.current){return playItem(DEMOS[0].id,DEMOS.map(item=>item.id));}if(audio.paused){try{await audio.play();}catch{toast('Could not play this track');}}else audio.pause();updateFooter();});
   $('#next').addEventListener('click',()=>step(1));$('#prev').addEventListener('click',()=>{if(audio.currentTime>3){audio.currentTime=0;return;}step(-1);});
   $('#player-like').addEventListener('click',()=>state.current&&toggleLike(state.current.id));
