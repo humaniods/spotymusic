@@ -5,9 +5,9 @@ import { reviveMultiTrack, SOURCES } from './providers.mjs';
 import { communityApi, reviveCommunity } from './community-api.mjs';
 import { askConfirm } from './dialogs.mjs';
 import {
-  canCache, fetchAudio, planEviction, buildRecord, formatBytes, offlineCell,
+  canCache, fetchAudio, planEviction, buildRecord, formatBytes, offlineCell, autoProtectKeys,
   openLibrary, listSaved, saveSaved, readSavedAudio, touchSaved, dropSaved,
-  requestPersistence, DEFAULT_CAP_BYTES
+  requestPersistence, DEFAULT_CAP_BYTES, MAX_TRACK_BYTES, AUTO_KEEP_MAX_BYTES
 } from './library.mjs';
 
 // Demo audio is synthesized on first play, not at import: three 20-second WAVs cost
@@ -32,7 +32,7 @@ const ART = [
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const audio = $('#audio');
-const state = {tracks:[...DEMOS],online:[],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map(),offline:new Map(),saving:new Set(),playingOffline:false};
+const state = {tracks:[...DEMOS],online:[],links:[],liked:new Set(),playlists:[],page:'home',activePlaylist:null,current:null,queue:[],queueIndex:0,repeat:'off',shuffle:false,query:'',objectUrls:new Map(),offline:new Map(),saving:new Set(),playingOffline:false,autoKeep:true};
 let db = null, offlineDb = null, toastTimer;
 // Re-importing the same file is the easiest way to double-book a library.
 const fingerprints=new Set();
@@ -40,6 +40,7 @@ const fingerprints=new Set();
 function readJSON(key, fallback) {
   try {const value = JSON.parse(localStorage.getItem(`openmic:v1:${key}`));return value ?? fallback;}catch{return fallback;}
 }
+function writeJSON(key, value) { try { localStorage.setItem(`openmic:v1:${key}`, JSON.stringify(value)); } catch { /* the setting lives for this session only */ } }
 // Each source has its own reviver because each one re-checks its own id shape and
 // rebuilds the stream URL instead of trusting the stored copy. A saved record whose
 // kind no longer matches is dropped rather than played from an unchecked URL.
@@ -142,13 +143,14 @@ function renderPage(){
     $('#offline-panel').classList.remove('hidden');
     const rows=[...state.offline.values()];
     const items=rows.map(row=>row.item||getItem(row.key)).filter(Boolean);
+    $('#offline-auto').checked=state.autoKeep;
     $('#offline-count').textContent=rows.length
       ?`${items.length} recording${items.length===1?'':'s'} · ${formatBytes(offlineUsed())} of ${formatBytes(offlineCap())} kept on this device`
-      :'Nothing saved yet';
+      :state.autoKeep?'Waiting for the first song':'Nothing saved yet';
     $('#offline-bar').style.width=offlineCap()?Math.min(100,offlineUsed()/offlineCap()*100)+'%':'0%';
     $('#offline-note').textContent=rows.length
       ?'These play with the network switched off. OpenMic keeps a copy only where the recording itself is free to keep - Audius, Openverse, Wikimedia Commons and artist uploads from this server.'
-      :'Tap the download arrow on an Audius, Openverse, Wikimedia Commons or artist-upload row, and it will be here when you have no signal.';
+      :'Turn on "Keep what I play" below, or tap the download arrow on an Audius, Openverse, Wikimedia Commons or artist-upload row.';
     renderRows('#offline-list',items,'No offline recordings yet');
   } else {
     $('#collection-panel').classList.remove('hidden');
@@ -227,12 +229,17 @@ async function loadOfflineLibrary(){
   }
   renderPage();updateFooter();
 }
-async function saveOffline(item){
+async function saveOffline(item, {auto = false} = {}){
   if(state.saving.has(item.id))return;
   state.saving.add(item.id);
   try{
-    const blob=await fetchAudio(item);
-    const plan=planEviction([...state.offline.values()],blob.size,offlineCap(),[item.id,state.current?.id]);
+    // A silent keep after playback gets the small ceiling: nothing big leaves the network
+    // unless the listener pressed the arrow and asked for it.
+    const blob=await fetchAudio(item, fetch, auto?AUTO_KEEP_MAX_BYTES:MAX_TRACK_BYTES);
+    const entries=[...state.offline.values()];
+    const plan=planEviction(entries,blob.size,offlineCap(),auto
+      ? autoProtectKeys(entries,item.id,state.current?.id)
+      : [item.id,state.current?.id]);
     if(!plan.ok)throw new Error(plan.reason==='too-big'
       ?'That recording is larger than the whole offline library.'
       :'No room left. Remove an offline copy and try again.');
@@ -244,19 +251,31 @@ async function saveOffline(item){
     // A browser drops ordinary storage when the disk fills up, which would undo exactly
     // what the listener asked for, so the first write asks for persisted storage.
     await requestPersistence();
-    const record=buildRecord(item,blob);
+    const record=buildRecord(item,blob,{auto});
     if(!record)throw new Error('This recording cannot be saved offline.');
     record.blob=blob;
     await saveSaved(offlineDb,record);
     const{blob:_drop,...meta}=record;
     state.offline.set(meta.key,meta);
-    toast('Saved '+formatBytes(blob.size)+' on this device. It plays without internet.');
+    toast((auto?'Kept ':'Saved ')+formatBytes(blob.size)+' on this device. It plays without internet.');
   }catch(error){
-    toast(String(error?.message||error));
+    // The song is playing while this runs, so a background keep stays quiet and only the
+    // button the listener pressed reports why nothing landed.
+    if(auto)console.warn('Auto-keep skipped',error);
+    else toast(String(error?.message||error));
   }finally{
     state.saving.delete(item.id);
     renderPage();syncOfflineButtons();
   }
+}
+// The second goal in one line: a song you have heard is a song you can hear again with no
+// signal. Only rows whose bytes reach this browser qualify, an existing copy is never
+// re-downloaded, and a full library refuses instead of dropping something on purpose.
+function autoKeepAfterPlay(item){
+  if(!state.autoKeep||!navigator.onLine)return;
+  if(state.offline.has(item.id)||state.saving.has(item.id))return;
+  if(!canCache(item))return;
+  saveOffline(item,{auto:true}).catch(()=>{});
 }
 function forgetOfflineCopy(id){
   state.offline.delete(id);
@@ -406,7 +425,7 @@ async function playItem(id, queueIds){const item=getItem(id);if(!item)return toa
   state.current=item;
   if(item.kind==='spotify'){releaseAudio();enableSpotifyFrame(item);toast('Official Spotify player opened');}
   else if(item.kind==='youtube'){releaseAudio();enableYouTubeRow(item);toast('Official YouTube player opened');}
-  else{clearEmbed();releaseAudio();const source=await resolveSource(item);if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();}catch(error){await reportPlayFailure(item,error);}}
+  else{clearEmbed();releaseAudio();const source=await resolveSource(item);if(!source){toast('Audio missing. Please import this file again.');return;}audio.src=source;try{await audio.play();autoKeepAfterPlay(item);}catch(error){await reportPlayFailure(item,error);}}
   updateFooter();renderPage();syncOfflineButtons();
 }
 function step(direction){if(!state.queue.length)return;let index;if(direction===-1){index=state.queueIndex>0?state.queueIndex-1:state.repeat==='all'?state.queue.length-1:-1;}else{index=nextIndex(state.queueIndex,state.queue.length,{repeat:state.repeat,shuffle:state.shuffle});}if(index<0){audio.pause();audio.currentTime=0;updateFooter();return;}state.queueIndex=index;playItem(state.queue[index],state.queue);}
@@ -424,7 +443,14 @@ function openFullTrack(button){
   updateFooter();
   communityApi.fullTrack(lookup)
     .then(found=>{enableYouTubeFrame(found.videoId);toast('Full recording playing from YouTube');})
-    .catch(error=>toast(error?.status===404?'YouTube has no official video for that recording.':error.message))
+    // Catalog lookups expire one row at a time, so the row answers for itself: the button
+    // goes inert rather than being clickable forever on a recording that has no video.
+    .catch(error=>{
+      if(error?.status!==404)return toast(error.message);
+      button.dataset.taken='out';
+      button.textContent='No full version';
+      toast('YouTube has no official video for that recording.');
+    })
     .finally(()=>{button.disabled=false;});
 }
 function createPlaylist(){openPlaylistDialog(null);}
@@ -480,6 +506,7 @@ function events(){
     const freeInput=$('#free-query');freeInput.value=wanted.slice(0,100);
     freeInput.closest('form').requestSubmit();
   });
+  $('#offline-auto').addEventListener('change',event=>{state.autoKeep=event.target.checked;writeJSON('auto-keep',state.autoKeep);toast(state.autoKeep?'Every song you play is now kept on this device':'Keeping stopped - new plays will only stream');renderPage();});
   $('#toggle-play').addEventListener('click',async()=>{if(!state.current){return playItem(DEMOS[0].id,DEMOS.map(item=>item.id));}if(audio.paused){try{await audio.play();}catch{toast('Could not play this track');}}else audio.pause();updateFooter();});
   $('#next').addEventListener('click',()=>step(1));$('#prev').addEventListener('click',()=>{if(audio.currentTime>3){audio.currentTime=0;return;}step(-1);});
   $('#player-like').addEventListener('click',()=>state.current&&toggleLike(state.current.id));
@@ -499,6 +526,7 @@ function events(){
   window.addEventListener('beforeunload',()=>{for(const url of state.objectUrls.values())URL.revokeObjectURL(url);});
 }
 async function init(){
+  state.autoKeep=readJSON('auto-keep',true)!==false;
   state.links=sanitizeLinks(readJSON('links',[]));
   state.online=(Array.isArray(readJSON('online',[])) ? readJSON('online',[]) : []).map(reviveSaved).filter(Boolean).slice(-300);
   state.liked=new Set(readJSON('liked',[]).filter(id=>typeof id==='string'));

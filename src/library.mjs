@@ -10,6 +10,9 @@ export const DEFAULT_CAP_BYTES = 512 * 1024 * 1024;
 // One track gets at most this much of the cap, so a single lossless album rip cannot
 // quietly evict everything the listener saved before it.
 export const MAX_TRACK_BYTES = 100 * 1024 * 1024;
+// A copy the listener never asked for has to stay small: this is the ceiling for the
+// silent save that happens after a song plays, well under the deliberate one.
+export const AUTO_KEEP_MAX_BYTES = 25 * 1024 * 1024;
 
 const DB_NAME = 'openmic-offline';
 const DB_VERSION = 1;
@@ -70,9 +73,24 @@ export function planEviction(entries, incoming, cap = DEFAULT_CAP_BYTES, protect
   return { ok: true, reason: '', drop, used, needed: wanted };
 }
 
+// Room for a silent auto-keep comes from other auto-keeps. A recording the listener saved
+// on purpose is never traded away for one they never asked for, so every non-auto key is
+// protected here; if that leaves no room, planEviction refuses and nothing is played down.
+export function autoProtectKeys(entries, incoming, playing) {
+  const keys = new Set();
+  if (incoming) keys.add(String(incoming));
+  if (playing) keys.add(String(playing));
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (entry && entry.auto !== true && typeof entry.key === 'string') keys.add(entry.key);
+  }
+  return [...keys];
+}
+
 // A record is written only after the fetch has been checked, so nothing but a real audio
 // blob reaches disk. `track` is the row the app already rebuilt through its own reviver.
-export function buildRecord(track, blob) {
+// `auto` marks a copy the app kept after playback instead of one the listener asked for,
+// which is what decides whether it may be evicted to make room for the next recording.
+export function buildRecord(track, blob, { auto = false } = {}) {
   const bytes = Number(blob?.size);
   if (!canCache(track) || !Number.isFinite(bytes) || bytes <= 0) return null;
   return {
@@ -81,6 +99,7 @@ export function buildRecord(track, blob) {
     mime: String(blob.type || '').slice(0, 60),
     savedAt: Date.now(),
     lastPlayed: 0,
+    auto: auto === true,
     item: {
       id: track.id, title: track.title, artist: track.artist, source: track.source,
       page: track.page, license: track.license, kind: track.kind, duration: track.duration || 0,
@@ -88,7 +107,7 @@ export function buildRecord(track, blob) {
   };
 }
 
-export async function fetchAudio(track, fetchImpl = fetch) {
+export async function fetchAudio(track, fetchImpl = fetch, maxBytes = MAX_TRACK_BYTES) {
   // Checked as a whole row, not just a URL: an embed or live row must never reach the
   // network for bytes it is not allowed to keep.
   if (!canCache(track)) throw new Error('This recording cannot be saved offline.');
@@ -100,10 +119,10 @@ export async function fetchAudio(track, fetchImpl = fetch) {
   // fill the library with a file that can never play.
   if (/text\/html/i.test(type)) throw new Error('That source did not return audio.');
   const declared = Number(response.headers?.get?.('content-length') || 0);
-  if (declared > MAX_TRACK_BYTES) throw new Error('This recording is too large to keep offline.');
+  if (declared > maxBytes) throw new Error('This recording is too large to keep offline.');
   const blob = await response.blob();
   if (!blob?.size) throw new Error('That recording came back empty.');
-  if (blob.size > MAX_TRACK_BYTES) throw new Error('This recording is too large to keep offline.');
+  if (blob.size > maxBytes) throw new Error('This recording is too large to keep offline.');
   return blob;
 }
 

@@ -21,7 +21,7 @@ Seven things a real person can do end to end today. Each was click-through verif
 | 2 | Independent artist | Publish my own songs | **For artists** → sign up → profile → upload file → accept rights warranty → publish | Yes |
 | 3 | Fan / A&R | Find artists by mood, not just by name | **Community** → describe a mood → *Ask the assistant* → search rewritten into catalog terms | Yes |
 | 4 | Crate digester / DJ | My files, radio and open catalogs in one library | Drag audio anywhere, or *Add audio files* → likes, playlists, queue, shuffle/repeat | Yes |
-| 5 | Listener on a train / no data | Hear again what I already heard | Tap the download arrow on a keepable row → **Offline** → it plays with the network off and the server unreachable | Yes |
+| 5 | Listener on a train / no data | Hear again what I already heard | It is automatic now: play a keepable row once → **Offline** → it plays with the network off and the server unreachable (or press the row's download arrow) | Yes |
 | 6 | Rightsholder | Get an infringing upload removed | Flag the row (or the Community disclaimer) → complete the notice → file deleted, fingerprint denylisted, strike recorded | Yes |
 | 7 | Operator | Run this on my own box | `npm start` with `PORT` / `OPENMIC_HOST` / `OPENMIC_DMCA_EMAIL` → nothing else to provision | Yes |
 
@@ -89,6 +89,8 @@ Playback prefers the disk over the network: a saved copy plays from a `blob:` UR
 
 There is deliberately no save button on Spotify, YouTube, Apple-preview or radio rows: those bytes are played by the provider's own player and never arrive here, so storing them would mean capturing someone else's stream.
 
+**The arrow is not the only way a copy gets here.** *Keep what I play* on the Offline screen is on by default: the moment a keepable row actually starts playing, OpenMic quietly runs the same save in the background, so "heard it once" already means "listenable with no data" without hunting for the arrow. Four things bound it. It fires only after `audio.play()` resolved, so a dead stream keeps nothing. It uses a **25 MB** ceiling instead of the 100 MB one — the background save never pulls a file nobody asked for. It may only ever evict **another auto-keep**: a copy you pressed the arrow on is protected, and if that leaves no room the auto-keep is refused rather than paid for with your recording. And it stays silent when it fails — the row's own arrow still reports the reason if you press it. Uncheck *Keep what I play* and the behaviour returns to explicit saves only; the choice persists on the device.
+
 ### 6 · A rightsholder gets a recording taken down
 
 Anyone — anonymously — can flag a Community row or use the disclaimer link. A vague notice is rejected; a valid one must state the work, its location, contact details and a good-faith statement. On acceptance the recording is deleted immediately (metadata *and* audio file), its **SHA-256 fingerprint is denylisted** so it cannot come back through another account, the confirmation prints the agent address a counter-notice goes to, and the notice counts as a strike. **Two notices terminate the account**: remaining tracks are removed, sessions are dropped and the handle can no longer sign in. An artist deleting *their own* upload is not a strike and does not poison the fingerprint, so the same take can be re-uploaded.
@@ -147,7 +149,7 @@ The catalog problem cannot be solved honestly by an app this size. Nearly everyt
 | Renaming a profile left stale credits | Published rows kept crediting an abandoned name | `PATCH /api/profile` re-credits that artist's tracks |
 | Assistant missed remixes | "A remix of a Bollywood song" raised no flag | Remix rule added alongside sample, cover, type-beat, label and streaming-link rules |
 | Stale app after every deploy | `python3 -m http.server` sent no `Cache-Control`, so browsers kept running an old `app.mjs` | `no-cache` + ETag for app files, `immutable` for audio — `server/static.mjs` |
-| Nothing played without a connection | Every row needed the provider's servers up, even one you had already listened to | Download arrow on keepable rows → IndexedDB copies with a 512 MB cap, LRU eviction and a `blob:`-first player, plus a service worker so the app itself opens offline — `src/library.mjs`, `sw.js` |
+| Nothing played without a connection | Every row needed the provider's servers up, even one you had already listened to | Play a keepable row once and its copy is kept automatically (or press its download arrow) → IndexedDB copies with a 512 MB cap, LRU eviction and a `blob:`-first player, plus a service worker so the app itself opens offline — `src/library.mjs`, `sw.js` |
 | Server errors shown twice-escaped | `&amp;quot;` in the UI | Single-escape path fixed — `7b96fde` |
 | Account store world-readable | `db.json` with password hashes in a shared worktree | Directory `0700`, file `0600`, git-ignored, `data/` never committed |
 | Most of one stylesheet was dead | One unterminated `.row-remove` rule made the browser nest the rest of `styles.css` inside it, so the row grid, `.danger`, `.playlist-options` and `.row-remove` never applied | Repaired while theming — `32c25f7` |
@@ -182,10 +184,10 @@ Salted `scrypt` (N=16384) password hashes, never logged in clear text. Sessions 
 ## Tests
 
 ```bash
-npm test           # 86 tests, no network access
+npm test           # 87 tests, no network access
 ```
 
-`node --test tests/*.test.mjs` over seven files: `core` (state, storage, queue), `providers` (all six adapters, Apple's preview-only rule, newest-first ordering and the YouTube handoff, the embed-only YouTube row, filtering, backoff), `audius` (catalog, stream URLs, attribution safety), `community` (browser client, id normalisation), `demo-audio` (WAV fixture validity), `library` (what may be kept, the byte cap and least-listened eviction, record shape, blob round-trip through a fake IndexedDB), `server` (boots the real server on an ephemeral port with a temporary data dir and drives every route, including uploads, Range reads, takedowns, strikes, the assistant, and the keyed/keyless full-track and YouTube-source lookups with their cache and quota). CI runs `node --check` across every module plus this suite on each push.
+`node --test tests/*.test.mjs` over seven files: `core` (state, storage, queue), `providers` (all six adapters, Apple's preview-only rule, newest-first ordering and the YouTube handoff, the embed-only YouTube row, filtering, backoff), `audius` (catalog, stream URLs, attribution safety), `community` (browser client, id normalisation), `demo-audio` (WAV fixture validity), `library` (what may be kept, the two byte ceilings — the 25 MB one the background keep works to and the 100 MB one an explicit press gets — least-listened eviction that never trades away a copy you asked for, record shape, blob round-trip through a fake IndexedDB), `server` (boots the real server on an ephemeral port with a temporary data dir and drives every route, including uploads, Range reads, takedowns, strikes, the assistant, and the keyed/keyless full-track and YouTube-source lookups with their cache and quota). CI runs `node --check` across every module plus this suite on each push.
 
 ## Configuration
 
@@ -202,7 +204,7 @@ The static player also runs on any plain file server (`npm run static`): Free Mu
 
 ## Privacy
 
-Imported local songs stay in browser IndexedDB. Favorites, playlists, saved links and stream metadata stay in browser localStorage. Offline copies you asked for stay in browser IndexedDB too (`openmic-offline`), on this device only — nothing indexes them, syncs them or uploads them, and removing one deletes both its row and its bytes. Free-source streams are fetched from the upstream providers, who receive ordinary requests from you, and an Apple row's *Full track* control sends that song's title and artist to YouTube — as a public search URL from your browser, or as one server-side Data API lookup when a key is configured. A YouTube search does the same: the words you typed go to Google, and the video then plays from Google's own player. Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`. Nothing goes to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment collection, no ads.
+Imported local songs stay in browser IndexedDB. Favorites, playlists, saved links and stream metadata stay in browser localStorage. Offline copies stay in browser IndexedDB too (`openmic-offline`), on this device only — whether you pressed the arrow or the app kept one after a song played (that background keep is on by default and the Offline screen can switch it off) — nothing indexes them, syncs them or uploads them, and removing one deletes both its row and its bytes. Free-source streams are fetched from the upstream providers, who receive ordinary requests from you, and an Apple row's *Full track* control sends that song's title and artist to YouTube — as a public search URL from your browser, or as one server-side Data API lookup when a key is configured. A YouTube search does the same: the words you typed go to Google, and the video then plays from Google's own player. Artist accounts, uploaded audio and login-failure counters live on the OpenMic server in `./data/`. Nothing goes to a third party unless you configure the optional assistant model, and even then only the artist's own draft text is forwarded. No tracking scripts, no payment collection, no ads.
 
 ## Code map
 

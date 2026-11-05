@@ -70,6 +70,12 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-grad
 .row-offline.saved .off-save{display:none}
 .row-offline.saved .off-saved{display:inline}
 .row-offline.saved{border-color:#4f6b3f;color:#dcffc8}
+/* An Apple row whose full listen no longer resolves keeps its shape and says so. */
+.row-full[data-taken="out"]{border-style:dashed;color:var(--muted,#8b9699);pointer-events:none;text-decoration:none}
+.offline-auto{display:flex;align-items:flex-start;gap:10px;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line,#2c3437);border-radius:12px;background:#ffffff0d;max-width:560px;cursor:pointer}
+.offline-auto input{margin:3px 0 0;accent-color:var(--green,#7fb63c);width:16px;height:16px;flex:none}
+.offline-auto span{font-size:13px;line-height:1.45;color:#cfd6d4}
+.offline-auto b{display:block;font-size:13px;margin-bottom:2px;color:#fff}
 .offline-meter{display:flex;align-items:center;gap:14px;margin:0 0 12px}
 .offline-bar{flex:1;height:6px;background:#22292b;border-radius:999px;overflow:hidden;max-width:340px}
 .offline-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7fb63c,var(--green));border-radius:999px;transition:width .2s}
