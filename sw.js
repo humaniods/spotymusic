@@ -2,7 +2,7 @@
 // IndexedDB by src/library.mjs) and OpenMic itself, which has to still open with no
 // network. This worker caches only OpenMic's own files - never /api, never a provider's
 // audio, never an embed frame - so nothing here can serve somebody else's content.
-const CACHE = 'openmic-shell-v1';
+const CACHE = 'openmic-shell-v2';
 const ASSETS = [
   './',
   './index.html',

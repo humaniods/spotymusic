@@ -5,7 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   OFFLINE_KINDS, canCache, cacheableSource, planEviction, buildRecord, fetchAudio,
-  formatBytes, offlineCell, offlinePill, MAX_TRACK_BYTES, DEFAULT_CAP_BYTES
+  formatBytes, offlineCell, offlinePill, autoProtectKeys,
+  MAX_TRACK_BYTES, DEFAULT_CAP_BYTES, AUTO_KEEP_MAX_BYTES
 } from '../src/library.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -87,6 +88,28 @@ test('saving keeps the newest copies and drops what the listener stopped playing
   assert.equal(planEviction([{ key: 'junk' }], 5 * MB, cap).ok, true);
 });
 
+test('a silent auto-keep only ever trades away another auto-keep', () => {
+  const hand = { key: 'audius:picked', bytes: 10 * MB, savedAt: 100, auto: false };
+  const quiet = { key: 'openverse:heard', bytes: 10 * MB, savedAt: 200, auto: true };
+  const rows = [hand, quiet];
+
+  assert.deepEqual(autoProtectKeys(rows, 'commons:new', 'audius:picked').sort(), ['audius:picked', 'commons:new']);
+
+  // Room for the copy nobody asked for comes from the other copy nobody asked for.
+  const plan = planEviction(rows, 10 * MB, 25 * MB, autoProtectKeys(rows, 'commons:new'));
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.drop, ['openverse:heard']);
+
+  // Only a hand-saved copy is left and there is no room: the auto-keep is refused rather
+  // than paid for with something the listener pressed the arrow on.
+  const full = planEviction([hand], 10 * MB, 15 * MB, autoProtectKeys([hand], 'commons:new'));
+  assert.equal(full.ok, false);
+  assert.equal(full.reason, 'full');
+  assert.deepEqual(full.drop, []);
+
+  assert.deepEqual(autoProtectKeys(null, undefined, undefined), []);
+});
+
 test('a record only exists once there is a real audio blob behind a keepable row', () => {
   const record = buildRecord(row('commons'), { size: 4 * MB, type: 'audio/mpeg' });
   assert.equal(record.key, 'commons:track-1');
@@ -94,7 +117,9 @@ test('a record only exists once there is a real audio blob behind a keepable row
   assert.equal(record.mime, 'audio/mpeg');
   assert.equal(record.item.source, 'https://cdn.example/monsoon.mp3');
   assert.equal(record.lastPlayed, 0);
+  assert.equal(record.auto, false);
   assert.ok(record.savedAt > 0);
+  assert.equal(buildRecord(row('audius'), { size: 4 * MB }, { auto: true }).auto, true);
   assert.equal(buildRecord(row('youtube'), { size: 4 * MB }), null);
   assert.equal(buildRecord(row('audius'), { size: 0 }), null);
   assert.equal(buildRecord(row('audius'), null), null);
@@ -125,6 +150,13 @@ test('the download refuses an error page, an empty body and an oversized file', 
   let asked = 0;
   await assert.rejects(() => fetchAudio(row('youtube'), async () => { asked++; return response(); }), /cannot be saved/);
   assert.equal(asked, 0);
+
+  // The background keep gets the smaller ceiling, so a recording nobody asked for cannot
+  // pull a whole album across the network; the same size is fine when it is pressed on.
+  const oversized = async () => response({ length: String(AUTO_KEEP_MAX_BYTES + 1) });
+  await assert.rejects(() => fetchAudio(row('openverse'), oversized, AUTO_KEEP_MAX_BYTES), /too large/);
+  const explicit = await fetchAudio(row('openverse'), oversized, MAX_TRACK_BYTES);
+  assert.equal(explicit.size, 2048);
 });
 
 test('sizes are readable in the units a listener compares', () => {
@@ -183,4 +215,8 @@ test('the default cap leaves a browser room to breathe', () => {
   assert.equal(DEFAULT_CAP_BYTES, 512 * MB);
   assert.equal(MAX_TRACK_BYTES, 100 * MB);
   assert.ok(MAX_TRACK_BYTES < DEFAULT_CAP_BYTES / 2);
+  // Level with the server's own 25 MB upload limit, so any artist upload on this box can
+  // be kept by the background save without a special case.
+  assert.equal(AUTO_KEEP_MAX_BYTES, 25 * MB);
+  assert.ok(AUTO_KEEP_MAX_BYTES < MAX_TRACK_BYTES);
 });

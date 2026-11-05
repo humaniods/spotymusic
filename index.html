@@ -162,6 +162,10 @@
             <p>Recordings kept on this device. Once a song is saved here it plays again with the network switched off — no stream, no data, no waiting for a source to answer.</p></div>
           <div class="offline-meter"><div class="offline-bar"><i id="offline-bar"></i></div><span class="section-note" id="offline-count">Nothing saved yet</span></div>
           <p class="section-note" id="offline-note" role="status" aria-live="polite"></p>
+          <label class="offline-auto" for="offline-auto">
+            <input id="offline-auto" type="checkbox" checked>
+            <span><b>Keep what I play</b> Once a song starts playing, its copy lands here automatically — no arrow to press, no data on the next listen.</span>
+          </label>
           <div class="section-heading"><h2>Saved on this device</h2><span class="section-note">Tap the check on a row to drop its copy</span></div>
           <div class="track-list" id="offline-list"></div>
           <p class="free-disclaimer">OpenMic keeps a copy only where the recording itself is free to keep: Audius artists, Openverse and Wikimedia Commons under their licences, and uploads artists published to this server. Spotify and YouTube play inside their own players and Apple sends a short preview from Apple's servers, so no audio from those reaches this browser and there is nothing to store. Live radio is a broadcast, not a file. Removing a copy — or a rights notice against an upload — deletes the audio from this browser.</p>
